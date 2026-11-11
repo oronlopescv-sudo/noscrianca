@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { central, c } from "@/db/central";
 import type { Institution } from "@/db/central/schema";
 import { getTenantDb, t, type TenantDb } from "@/db/tenant";
@@ -179,6 +179,16 @@ export function childScope(ctx: TenantCtx) {
   return inArray(t.children.classroomId, ctx.classroomIds);
 }
 
+/** Verifica se um funcionário pode ver a conversa de um encarregado. */
+export async function staffCanSeeGuardian(ctx: TenantCtx, guardianId: string): Promise<boolean> {
+  if (ctx.classroomIds === null) return true;
+  if (!ctx.classroomIds.length) return false;
+  const rows = await ctx.db.select({ id: t.children.id }).from(t.childGuardians)
+    .innerJoin(t.children, eq(t.children.id, t.childGuardians.childId))
+    .where(and(eq(t.childGuardians.guardianId, guardianId), inArray(t.children.classroomId, ctx.classroomIds)));
+  return rows.length > 0;
+}
+
 export async function audit(ctx: TenantCtx, action: string, extra: { entity?: string; entityId?: string; details?: unknown } = {}) {
   await ctx.db.insert(t.auditLogs).values({
     userId: ctx.user.id,
@@ -196,4 +206,35 @@ export async function notify(db: TenantDb, userIds: string[], n: { title: string
 
 export function panelHome(ctx: TenantCtx): string {
   return `${ctx.base}/${ctx.panel === "GUARDIAN" ? "pais" : ctx.panel === "CLASSROOM" ? "sala" : "gestao"}`;
+}
+
+export function hexToRgbTriplet(hex: string): string {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  return m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : "240 113 79";
+}
+
+/** Marca da instituição para páginas sem sessão (login, convite). */
+export const tenantBranding = cache(async (slug: string) => {
+  const institution = await getInstitutionBySlug(slug);
+  if (!institution || !institutionUsable(institution.status)) return { institution, name: institution?.name ?? "", accent: "240 113 79", logoSrc: null as string | null };
+  try {
+    const db = await getTenantDb(institution.id);
+    const s = await db.query.settings.findFirst({ where: eq(t.settings.id, 1) });
+    return {
+      institution, name: s?.name ?? institution.name, accent: hexToRgbTriplet(s?.accentColor ?? ""),
+      logoSrc: s?.logoPath ? `/c/${slug}/logo?v=${encodeURIComponent(s.logoPath.slice(-24))}` : null,
+    };
+  } catch {
+    return { institution, name: institution.name, accent: "240 113 79", logoSrc: null as string | null };
+  }
+});
+
+export function fileUrl(ctx: { base: string }, relPath: string | null | undefined): string | null {
+  return relPath ? `${ctx.base}/ficheiro/${relPath}` : null;
+}
+
+export async function unreadNotifications(ctx: TenantCtx): Promise<number> {
+  const rows = await ctx.db.select({ id: t.notifications.id }).from(t.notifications)
+    .where(and(eq(t.notifications.userId, ctx.user.id), isNull(t.notifications.readAt))).limit(10);
+  return rows.length;
 }
