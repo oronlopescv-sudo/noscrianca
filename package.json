@@ -1,0 +1,48 @@
+{
+  "name": "noscrianca",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:setup": "tsx --conditions=react-server scripts/setup.ts",
+    "seed:demo": "tsx --conditions=react-server scripts/seed-demo.ts",
+    "tenants:migrate": "tsx --conditions=react-server scripts/tenants.ts migrate",
+    "tenants:backup": "tsx --conditions=react-server scripts/tenants.ts backup",
+    "tenants:restore": "tsx --conditions=react-server scripts/tenants.ts restore",
+    "test": "vitest run",
+    "test:pages": "tsx --conditions=react-server scripts/crawl.ts",
+    "db:generate": "drizzle-kit generate --config drizzle.central.config.ts && drizzle-kit generate --config drizzle.tenant.config.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@paralleldrive/cuid2": "^3.3.0",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.4",
+    "lucide-react": "^1.72.0",
+    "next": "^15.5.29",
+    "nodemailer": "^10.5.0",
+    "pdf-lib": "^1.17.1",
+    "pg": "^8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.6.2",
+    "drizzle-kit": "^0.31.11",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^3.4.19",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}
