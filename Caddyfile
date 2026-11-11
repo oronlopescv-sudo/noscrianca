@@ -1,0 +1,11 @@
+# HTTPS automático (Let's Encrypt). Troque o domínio pelo seu.
+noscrianca.exemplo.cv {
+	encode zstd gzip
+	reverse_proxy app:3000
+	request_body {
+		max_size 15MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+}
