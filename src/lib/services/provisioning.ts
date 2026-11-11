@@ -31,7 +31,7 @@ export function slugProblem(slug: string): string | null {
 }
 
 export function slugify(name: string): string {
-  return name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+  return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").replace(/^[^a-z]+/, "").slice(0, 30).replace(/-+$/, "");
 }
 

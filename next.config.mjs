@@ -1,6 +1,5 @@
-import type { NextConfig } from "next";
 
-const config: NextConfig = {
+const config = {
   output: "standalone",
   serverExternalPackages: ["pg", "nodemailer"],
   outputFileTracingIncludes: { "/*": ["./drizzle/**/*"] },

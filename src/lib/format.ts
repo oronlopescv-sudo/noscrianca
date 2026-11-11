@@ -101,5 +101,6 @@ export function csvCell(v: unknown): string {
 }
 
 export function toCsv(rows: unknown[][]): string {
-  return "﻿" + rows.map((r) => r.map(csvCell).join(";")).join("\r\n");
+  // BOM inicial para o Excel reconhecer UTF-8.
+  return String.fromCharCode(0xfeff) + rows.map((r) => r.map(csvCell).join(";")).join(String.fromCharCode(13, 10));
 }
