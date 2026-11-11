@@ -1,0 +1,56 @@
+# Produção num único servidor (VPS). Serviços: base de dados, aplicação e proxy HTTPS.
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nc_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: nc_central
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nc_admin -d nc_central"]
+      interval: 10s
+      retries: 10
+    networks: [internal]
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CENTRAL_DATABASE_URL: postgresql://nc_admin:${POSTGRES_PASSWORD}@db:5432/nc_central
+      STORAGE_DIR: /app/storage
+      BACKUP_DIR: /app/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - storage:/app/storage
+      - backups:/app/backups
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [internal, public]
+
+volumes:
+  pgdata:
+  storage:
+  backups:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+  public:
