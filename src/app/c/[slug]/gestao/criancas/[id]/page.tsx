@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ChildPage({ params, searchParams }: { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ mes?: string }> }) {
   const { slug, id } = await params;
-  const ctx = await requireTenant(slug, { permission: "children.view" });
+  const ctx = await requireTenant(slug, { panel: "MANAGEMENT", permission: "children.view" });
   const child = await ctx.db.query.children.findFirst({
     where: eq(t.children.id, id),
     with: {

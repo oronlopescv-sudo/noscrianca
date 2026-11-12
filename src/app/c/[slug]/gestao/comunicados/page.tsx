@@ -8,7 +8,7 @@ import { requireTenant, visibleClassrooms } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function AnnouncementsPage({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "announcements.manage" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "announcements.manage" });
   const [rows, classrooms] = await Promise.all([
     ctx.db.query.announcements.findMany({ orderBy: [desc(t.announcements.createdAt)], limit: 100, with: { classroom: true } }),
     visibleClassrooms(ctx),

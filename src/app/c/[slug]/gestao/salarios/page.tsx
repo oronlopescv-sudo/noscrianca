@@ -16,7 +16,7 @@ function shift(ym: string, delta: number): string {
 }
 
 export default async function PayrollPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ mes?: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "payroll.manage" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "payroll.manage" });
   const slug = ctx.institution.slug;
   const cur = ctx.settings.currency;
   const today = todayIn(ctx.settings.timezone);

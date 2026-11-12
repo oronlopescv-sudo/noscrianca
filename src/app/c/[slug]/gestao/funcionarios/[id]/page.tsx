@@ -16,7 +16,7 @@ const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Jul
 
 export default async function EmployeeProfile({ params, searchParams }: { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ ano?: string }> }) {
   const { slug, id } = await params;
-  const ctx = await requireTenant(slug, { permission: ["employees.manage", "payroll.manage"] });
+  const ctx = await requireTenant(slug, { panel: "MANAGEMENT", permission: ["employees.manage", "payroll.manage"] });
   const emp = await ctx.db.query.employees.findFirst({ where: eq(t.employees.id, id), with: { user: { with: { role: true } }, classrooms: { with: { classroom: true } } } });
   if (!emp || emp.user.deletedAt) notFound();
 

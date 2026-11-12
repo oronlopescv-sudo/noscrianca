@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const AUDIENCE: Record<string, string> = { ALL: "Pais e equipa", GUARDIANS: "Só pais", STAFF: "Só equipa" };
 
 export default async function AgendaPage({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "announcements.manage" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "announcements.manage" });
   const slug = ctx.institution.slug;
   const today = todayIn(ctx.settings.timezone);
   const [upcoming, past, classrooms] = await Promise.all([

@@ -22,13 +22,17 @@ export default async function Landing() {
       {institutions.length === 0 ? (
         <p className="mt-8 rounded-card bg-white p-6 text-center text-ink-soft shadow-sm">Ainda não há instituições disponíveis.</p>
       ) : (
-        <ul className="mt-8 grid gap-3 sm:grid-cols-2">
+        <ul id="creches" className="mt-8 grid scroll-mt-6 gap-3 sm:grid-cols-2">
           {institutions.map((i) => (
-            <li key={i.slug}>
-              <Link href={`/creche/${i.slug}`} className="card card-pad flex items-center justify-between gap-3 hover:border-accent">
-                <span><span className="block font-medium">{i.name}</span>{i.city && <span className="block text-xs text-ink-soft">{i.city}</span>}</span>
+            <li key={i.slug} className="card card-pad flex flex-col gap-4">
+              <Link href={`/creche/${i.slug}`} className="group flex items-center justify-between gap-3">
+                <span><span className="block font-medium group-hover:text-accent">{i.name}</span>{i.city && <span className="block text-xs text-ink-soft">{i.city}</span>}</span>
                 <span aria-hidden className="text-accent">→</span>
               </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/creche/${i.slug}`} className="btn btn-secondary btn-sm">Ver a creche</Link>
+                <Link href={`/c/${i.slug}/entrar`} className="btn-primary btn-sm">Entrar</Link>
+              </div>
             </li>
           ))}
         </ul>

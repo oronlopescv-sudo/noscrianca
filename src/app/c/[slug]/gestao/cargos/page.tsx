@@ -9,7 +9,7 @@ import { requireTenant } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function RolesPage({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "roles.manage" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "roles.manage" });
   const slug = ctx.institution.slug;
   const roles = await ctx.db.query.roles.findMany({ orderBy: [asc(t.roles.name)] });
   const usage = await ctx.db.select({ roleId: t.users.roleId, n: count() }).from(t.users).groupBy(t.users.roleId);

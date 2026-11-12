@@ -13,7 +13,7 @@ const STATUS: Record<string, { label: string; tone: "red" | "amber" | "gray" }> 
 const wa = (phone: string) => phone.replace(/[^0-9]/g, "");
 
 export default async function EnrollmentRequests({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "children.manage" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "children.manage" });
   const slug = ctx.institution.slug;
   const today = todayIn(ctx.settings.timezone);
   const rows = await ctx.db.query.enrollmentRequests.findMany({ orderBy: [desc(t.enrollmentRequests.createdAt)], limit: 200 });
