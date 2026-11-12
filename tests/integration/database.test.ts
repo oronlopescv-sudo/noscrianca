@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { central, c, closeCentral } from "@/db/central";
 import { closeAllTenantPools, getTenantDb, t, tenantConnectionString, type TenantDb } from "@/db/tenant";
 import { decrypt } from "@/lib/crypto";
-import { createExtraInvoice, generateMonthlyInvoices, recordPayment, reversePayment } from "@/lib/services/finance";
+import { createExtraInvoice, generateMonthlyInvoices, recordPayment, reversePayment, voidInvoice } from "@/lib/services/finance";
 import { todayIn } from "@/lib/format";
 
 /**
@@ -79,6 +79,21 @@ describe("finanças", () => {
     for (const i of invoices) perChild.set(i.childId, (perChild.get(i.childId) ?? 0) + 1);
     for (const n of perChild.values()) expect(n).toBe(1);
     expect(invoices.length).toBeGreaterThan(0);
+  });
+
+  it("mensalidade anulada não é recriada pela geração automática, só a pedido", async () => {
+    const period = `${2100 + (Date.now() % 800)}-03`; // mês único por execução
+    const today = `${period}-15`;
+    await generateMonthlyInvoices(sol.db, period, today);
+    const inv = await sol.db.query.invoices.findFirst({ where: and(eq(t.invoices.period, period), eq(t.invoices.kind, "MONTHLY")) });
+    expect(inv).toBeTruthy();
+    await voidInvoice(sol.db, inv!.id, "Teste de anulação");
+
+    const auto = await generateMonthlyInvoices(sol.db, period, today);
+    expect(auto.created).toBe(0);
+
+    const manual = await generateMonthlyInvoices(sol.db, period, today, { recreateVoided: true });
+    expect(manual.created).toBe(1);
   });
 
   it("pagamento atualiza o estado da fatura e recibo é emitido", async () => {

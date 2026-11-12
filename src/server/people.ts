@@ -364,6 +364,11 @@ export async function saveRoleAction(_p: S, fd: FormData): Promise<ActionResult>
     const ctx = await tenantAction(str(fd, "slug"), { permission: "roles.manage" });
     const id = str(fd, "roleId");
     const d = roleInput(fd);
+    // Só o diretor pode alterar o próprio cargo ou conceder permissões que não tem.
+    if (!ctx.isDirector) {
+      if (id && id === ctx.role?.id) fail("Não pode alterar o seu próprio cargo.");
+      if (d.permissions.some((p) => !ctx.can(p))) fail("Não pode conceder permissões que o seu cargo não tem.");
+    }
     const dup = await ctx.db.query.roles.findFirst({ where: and(eq(t.roles.name, d.name), id ? ne(t.roles.id, id) : undefined) });
     if (dup) fail("Já existe um cargo com este nome.");
     if (id) {

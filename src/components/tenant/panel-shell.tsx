@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpen, Briefcase, CalendarCheck, Baby, FileBarChart, History, Home, LayoutDashboard, Megaphone, MessageSquare, School, Settings, ShieldCheck, Users, Wallet, UserCog, Receipt, UserRound } from "lucide-react";
+import { BookOpen, Briefcase, CalendarCheck, CalendarDays, Baby, FileBarChart, History, Home, LayoutDashboard, Megaphone, MessageSquare, School, Settings, ShieldCheck, Users, Wallet, UserCog, Receipt, UserRound } from "lucide-react";
 import { BottomNavShell, SidebarShell, type NavItem } from "@/components/shell";
 import { Notice } from "@/components/ui/kit";
 import { tenantLogoutAction } from "@/server/auth";
@@ -12,6 +12,7 @@ export function managementNav(ctx: TenantCtx): NavItem[] {
   const items: NavItem[] = [{ href: `${b}/gestao`, label: "Painel", icon: ic(<LayoutDashboard size={18} />), exact: true, section: "Geral" }];
   const add = (ok: boolean, href: string, label: string, icon: ReactNode, section: string) => { if (ok) items.push({ href, label, icon, section }); };
   add(ctx.can("attendance.view"), `${b}/gestao/presencas`, "Presenças", ic(<CalendarCheck size={18} />), "Dia a dia");
+  add(ctx.can("attendance.view") || ctx.can("finance.view"), `${b}/gestao/calendario`, "Calendário mensal", ic(<CalendarDays size={18} />), "Dia a dia");
   add(ctx.can("messages.reply"), `${b}/gestao/mensagens`, "Mensagens", ic(<MessageSquare size={18} />), "Dia a dia");
   add(ctx.can("children.view"), `${b}/gestao/criancas`, "Crianças", ic(<Baby size={18} />), "Famílias");
   add(ctx.can("children.view"), `${b}/gestao/encarregados`, "Encarregados", ic(<Users size={18} />), "Famílias");

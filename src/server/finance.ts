@@ -7,7 +7,7 @@ import { isIsoDate, isPeriod, money, parseMoney, periodLabel, todayIn } from "@/
 import { bool, fail, file, run, str, type ActionResult } from "@/lib/result";
 import { createExtraInvoice, generateMonthlyInvoices, METHOD_LABELS, recordPayment, reversePayment, voidInvoice } from "@/lib/services/finance";
 import { saveUpload } from "@/lib/storage";
-import { audit, notify, tenantAction, type TenantCtx } from "@/lib/tenant";
+import { assertChildAccess, audit, notify, tenantAction, type TenantCtx } from "@/lib/tenant";
 
 type S = ActionResult | null;
 
@@ -55,7 +55,7 @@ export async function generateInvoicesAction(_p: S, fd: FormData): Promise<Actio
     const period = str(fd, "period");
     if (!isPeriod(period)) fail("Mês inválido.");
     const before = new Date();
-    const r = await generateMonthlyInvoices(ctx.db, period, todayIn(ctx.settings.timezone));
+    const r = await generateMonthlyInvoices(ctx.db, period, todayIn(ctx.settings.timezone), { recreateVoided: true });
     if (r.created > 0) {
       const fresh = await ctx.db.query.invoices.findMany({ where: and(eq(t.invoices.period, period), eq(t.invoices.kind, "MONTHLY")) });
       for (const inv of fresh.filter((i) => i.createdAt >= before)) {
@@ -75,6 +75,7 @@ export async function createExtraInvoiceAction(_p: S, fd: FormData): Promise<Act
     const childId = str(fd, "childId");
     const child = await ctx.db.query.children.findFirst({ where: eq(t.children.id, childId) });
     if (!child) fail("Escolha a criança.");
+    await assertChildAccess(ctx, childId);
     const description = str(fd, "description");
     if (description.length < 2 || description.length > 160) fail("Indique a descrição.");
     const amountCents = parseMoney(str(fd, "amount"));
