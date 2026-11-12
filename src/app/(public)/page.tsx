@@ -10,14 +10,14 @@ const LISTED = ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED"] as const;
 export default async function Landing() {
   const institutions = await central().query.institutions.findMany({
     where: inArray(c.institutions.status, [...LISTED]),
-    columns: { name: true, slug: true },
+    columns: { name: true, slug: true, city: true },
     orderBy: (i, { asc }) => asc(i.name),
   });
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
       <h1 className="text-2xl sm:text-3xl">Escolha a sua instituição</h1>
-      <p className="mt-2 text-ink-soft">Selecione a creche para iniciar sessão com o seu email e palavra-passe.</p>
+      <p className="mt-2 text-ink-soft">Selecione uma creche para a conhecer ou para iniciar sessão.</p>
 
       {institutions.length === 0 ? (
         <p className="mt-8 rounded-card bg-white p-6 text-center text-ink-soft shadow-sm">Ainda não há instituições disponíveis.</p>
@@ -25,8 +25,8 @@ export default async function Landing() {
         <ul className="mt-8 grid gap-3 sm:grid-cols-2">
           {institutions.map((i) => (
             <li key={i.slug}>
-              <Link href={`/c/${i.slug}/entrar`} className="card card-pad flex items-center justify-between gap-3 hover:border-accent">
-                <span className="font-medium">{i.name}</span>
+              <Link href={`/creche/${i.slug}`} className="card card-pad flex items-center justify-between gap-3 hover:border-accent">
+                <span><span className="block font-medium">{i.name}</span>{i.city && <span className="block text-xs text-ink-soft">{i.city}</span>}</span>
                 <span aria-hidden className="text-accent">→</span>
               </Link>
             </li>
