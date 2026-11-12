@@ -8,7 +8,7 @@ import { deletePublicPhotoAction, savePublicPageAction, saveSettingsAction, remo
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "settings.manage" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "settings.manage" });
   const s = ctx.settings;
   const slug = ctx.institution.slug;
   const canWrite = !ctx.readOnly;

@@ -12,7 +12,7 @@ import { requireTenant } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function EmployeesPage({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "employees.manage" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "employees.manage" });
   const slug = ctx.institution.slug;
   const [employees, roles, classrooms] = await Promise.all([
     ctx.db.query.employees.findMany({ with: { user: { with: { role: true } }, classrooms: { with: {} } }, orderBy: (e, { asc }) => asc(e.createdAt) }),

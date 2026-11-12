@@ -7,7 +7,7 @@ import { requireTenant } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function AuditPage({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "audit.view" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "audit.view" });
   const logs = await ctx.db.select().from(t.auditLogs).orderBy(desc(t.auditLogs.createdAt)).limit(300);
   return (
     <>

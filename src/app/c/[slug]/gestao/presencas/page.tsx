@@ -7,7 +7,7 @@ import { requireTenant, visibleClassrooms } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function ManagementAttendance({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ turma?: string; data?: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "attendance.view" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "attendance.view" });
   const sp = await searchParams;
   const classrooms = await visibleClassrooms(ctx);
   const turma = classrooms.find((c) => c.id === sp.turma)?.id ?? null;

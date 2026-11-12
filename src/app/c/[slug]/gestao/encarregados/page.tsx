@@ -10,7 +10,7 @@ import { requireTenant } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function GuardiansPage({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "children.view" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "children.view" });
   const all = await ctx.db.query.guardians.findMany({
     with: { user: true, children: { with: { child: true } } },
     orderBy: (g, { asc }) => asc(g.createdAt),

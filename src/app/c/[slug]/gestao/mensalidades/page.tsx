@@ -12,7 +12,7 @@ import { fileUrl, requireTenant } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function FinancePage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ estado?: string; mes?: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "finance.view" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "finance.view" });
   const sp = await searchParams;
   const slug = ctx.institution.slug;
   const cur = ctx.settings.currency;

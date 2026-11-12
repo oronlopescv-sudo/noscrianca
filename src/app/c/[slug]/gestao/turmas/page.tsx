@@ -9,7 +9,7 @@ import { requireTenant } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function ClassroomsPage({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "children.view" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "children.view" });
   const slug = ctx.institution.slug;
   const canManage = ctx.can("classrooms.manage") && !ctx.readOnly;
   const [rooms, employees, counts, assigned] = await Promise.all([

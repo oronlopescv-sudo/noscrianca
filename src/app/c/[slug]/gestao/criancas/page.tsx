@@ -10,7 +10,7 @@ import { childScope, fileUrl, requireTenant, visibleClassrooms } from "@/lib/ten
 export const dynamic = "force-dynamic";
 
 export default async function ChildrenPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ q?: string; estado?: string; turma?: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "children.view" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "children.view" });
   const sp = await searchParams;
   const q = (sp.q ?? "").trim().slice(0, 80);
   const estado = sp.estado === "INACTIVE" ? "INACTIVE" : "ACTIVE";
