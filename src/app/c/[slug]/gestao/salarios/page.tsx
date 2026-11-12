@@ -58,7 +58,7 @@ export default async function PayrollPage({ params, searchParams }: { params: Pr
                   return (
                     <tr key={e.id} className={pay ? "bg-emerald-50/60" : e.salaryCents ? "bg-red-50/60" : undefined}>
                       <td>
-                        <p className="font-medium">{e.user.name}</p>
+                        <Link href={`${ctx.base}/gestao/funcionarios/${e.id}`} className="font-medium hover:text-accent">{e.user.name}</Link>
                         <p className="text-xs text-ink-soft">{e.user.role?.name ?? "Sem cargo"}{e.jobTitle ? ` · ${e.jobTitle}` : ""}</p>
                       </td>
                       <td>{e.salaryCents ? money(e.salaryCents, cur) : <span className="text-ink-soft">Por definir</span>}</td>

@@ -4,11 +4,43 @@ import { and, eq, isNull } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import type { PaymentMethod } from "@/db/tenant/schema";
 import { isIsoDate, isPeriod, money, parseMoney, periodLabel, todayIn } from "@/lib/format";
-import { fail, run, str, type ActionResult } from "@/lib/result";
+import { mailConfigured, sendMail } from "@/lib/mail";
+import { bool, fail, run, str, type ActionResult } from "@/lib/result";
 import { METHOD_LABELS } from "@/lib/services/finance";
-import { audit, notify, tenantAction } from "@/lib/tenant";
+import { salaryReceiptPdf } from "@/lib/services/tenant-pdf";
+import { audit, notify, tenantAction, type TenantCtx } from "@/lib/tenant";
 
 type S = ActionResult | null;
+
+/** Envia o recibo de vencimento (PDF em anexo) ao funcionário. Devolve a frase que descreve o resultado. */
+async function deliverSalaryReceipt(ctx: TenantCtx, paymentId: string): Promise<string> {
+  const doc = await salaryReceiptPdf(ctx.db, ctx.settings, paymentId);
+  if (!doc) fail("Pagamento não encontrado.");
+  const { employee: emp, payment: p, number, bytes } = doc!;
+  if (p.voidedAt) fail("Este pagamento foi anulado.");
+  const value = money(p.amountCents, ctx.settings.currency);
+  if (emp.user.status === "ACTIVE") {
+    await notify(ctx.db, [emp.userId], { title: `Recibo de vencimento de ${periodLabel(p.period)}`, body: `${value} · ${number}`, href: `${ctx.base}/perfil#salarios` });
+  }
+  if (!mailConfigured()) return "O recibo fica disponível no perfil do funcionário. O email não está configurado no servidor, por isso não foi enviado email.";
+  const s = ctx.settings;
+  const ok = await sendMail({
+    to: emp.user.email, replyTo: s.email || undefined,
+    subject: `${s.name}: recibo de vencimento de ${periodLabel(p.period)}`,
+    text: [`Olá ${emp.user.name},`, "", `Segue em anexo o recibo de vencimento de ${periodLabel(p.period)}.`, `Valor pago: ${value}. Data do pagamento: ${p.paidAt.split("-").reverse().join("/")}.`, "", s.name].join("\n"),
+    attachments: [{ filename: `recibo-vencimento-${number}.pdf`, content: bytes }],
+  });
+  await audit(ctx, ok ? "Recibo de vencimento enviado por email" : "Falha no envio do recibo de vencimento", { entity: "salaryPayment", entityId: p.id, details: { funcionario: emp.user.name, mes: p.period } });
+  return ok ? `Recibo enviado por email para ${emp.user.email}.` : "Não foi possível enviar o email. O recibo fica disponível no perfil do funcionário.";
+}
+
+/** Reenvia o recibo de vencimento de um pagamento já lançado. */
+export async function sendSalaryReceiptAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "payroll.manage" });
+    return { ok: true, message: await deliverSalaryReceipt(ctx, str(fd, "paymentId")) };
+  });
+}
 
 /** Define o salário mensal base de um funcionário. */
 export async function setSalaryAction(_p: S, fd: FormData): Promise<ActionResult> {
@@ -46,8 +78,11 @@ export async function paySalaryAction(_p: S, fd: FormData): Promise<ActionResult
       employeeId: emp!.id, period, amountCents: amountCents!, paidAt, method, notes: str(fd, "notes").slice(0, 300), recordedById: ctx.user.id, recordedByName: ctx.user.name,
     }).returning();
     const value = money(amountCents!, ctx.settings.currency);
-    if (emp!.user.status === "ACTIVE") await notify(ctx.db, [emp!.userId], { title: `Salário de ${periodLabel(period)} pago`, body: value, href: `${ctx.base}/perfil` });
     await audit(ctx, "Salário pago", { entity: "salaryPayment", entityId: pay.id, details: { funcionario: emp!.user.name, mes: period, valor: value, metodo: METHOD_LABELS[method] } });
+    if (bool(fd, "sendReceipt")) {
+      return { ok: true, message: `Salário de ${periodLabel(period)} lançado (${value}). ${await deliverSalaryReceipt(ctx, pay.id)}` };
+    }
+    if (emp!.user.status === "ACTIVE") await notify(ctx.db, [emp!.userId], { title: `Salário de ${periodLabel(period)} pago`, body: value, href: `${ctx.base}/perfil#salarios` });
     return { ok: true, message: `Salário de ${periodLabel(period)} marcado como pago (${value}).` };
   });
 }

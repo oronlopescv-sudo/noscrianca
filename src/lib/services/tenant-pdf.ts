@@ -52,3 +52,28 @@ export async function receiptPdf(db: TenantDb, s: Setting, paymentId: string) {
   });
   return { bytes, number: p.receipt.number, childId: p.invoice.childId };
 }
+
+/** Número legível do recibo de vencimento (derivado do mês e do registo). */
+export function salaryReceiptNumber(p: { id: string; period: string }): string {
+  return `RV-${p.period}-${p.id.slice(-6).toUpperCase()}`;
+}
+
+/** Recibo de vencimento de um pagamento de salário. */
+export async function salaryReceiptPdf(db: TenantDb, s: Setting, paymentId: string) {
+  const p = await db.query.salaryPayments.findFirst({ where: eq(t.salaryPayments.id, paymentId) });
+  if (!p) return null;
+  const emp = await db.query.employees.findFirst({ where: eq(t.employees.id, p.employeeId), with: { user: { with: { role: true } } } });
+  if (!emp) return null;
+  const number = salaryReceiptNumber(p);
+  const bytes = await buildDocPdf({
+    kind: "RECIBO DE VENCIMENTO", number, accent: s.accentColor, issuer: issuer(s),
+    recipient: { title: "Pago a", lines: [emp.user.name, emp.jobTitle || emp.user.role?.name || "", emp.user.email] },
+    meta: [["Mês de referência", periodLabel(p.period)], ["Data do pagamento", fmtDate(p.paidAt)], ["Método", METHOD_LABELS[p.method]]],
+    items: [{ description: `Salário de ${periodLabel(p.period)}`, amount: money(p.amountCents, s.currency) }],
+    totals: [["Valor pago", money(p.amountCents, s.currency)]],
+    stamp: p.voidedAt ? "ANULADO" : "PAGO",
+    note: [p.notes, `Registado por ${p.recordedByName}.`, p.voidedAt ? `Anulado por ${p.voidedByName ?? ""}.` : ""].filter(Boolean).join("\n"),
+    footer: `${s.name} — documento gerado eletronicamente`,
+  });
+  return { bytes, number, payment: p, employee: emp };
+}

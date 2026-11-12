@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { asc } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { ActionButton, ActionForm, Modal, Submit } from "@/components/ui/client";
@@ -68,11 +69,12 @@ export default async function EmployeesPage({ params }: { params: Promise<{ slug
       {employees.length === 0 ? <EmptyState title="Sem funcionários" text="Adicione a equipa e atribua cargos e turmas." /> : (
         <div className="grid gap-4 md:grid-cols-2">
           {employees.map((e) => (
-            <Card key={e.id} title={e.user.name} actions={<Badge tone={USER_STATUS[e.user.status]?.tone ?? "gray"}>{USER_STATUS[e.user.status]?.label ?? e.user.status}</Badge>}>
+            <Card key={e.id} title={<Link href={`${ctx.base}/gestao/funcionarios/${e.id}`} className="hover:text-accent">{e.user.name}</Link>} actions={<Badge tone={USER_STATUS[e.user.status]?.tone ?? "gray"}>{USER_STATUS[e.user.status]?.label ?? e.user.status}</Badge>}>
               <p className="text-sm text-ink-soft">{e.user.email}{e.user.phone ? ` · ${e.user.phone}` : ""}</p>
               <p className="mt-2 text-sm"><span className="font-medium">{e.user.role?.name ?? "Sem cargo"}</span>{e.jobTitle ? ` · ${e.jobTitle}` : ""}</p>
               <p className="text-xs text-ink-soft">{e.schedule || "Horário não definido"}{e.hireDate ? ` · admitido em ${e.hireDate.split("-").reverse().join("/")}` : ""}</p>
               <p className="mt-1 text-xs text-ink-soft">Turmas: {e.classrooms.length ? classrooms.filter((c) => classroomIdsOf(e).has(c.id)).map((c) => c.name).join(", ") : "todas (conforme o cargo)"}</p>
+              <p className="mt-3"><Link href={`${ctx.base}/gestao/funcionarios/${e.id}`} className="btn btn-secondary btn-sm">Ver perfil{ctx.can("payroll.manage") ? " e salários" : ""}</Link></p>
               {canManage && e.user.role?.key !== DIRECTOR_KEY && (
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
                   <Modal title={`Editar ${e.user.name}`} trigger="Editar" triggerClass="btn-secondary btn-sm" wide>
