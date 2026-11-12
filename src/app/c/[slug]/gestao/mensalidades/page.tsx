@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { ActionForm, ConfirmAction, Modal, Submit } from "@/components/ui/client";
 import { Badge, Card, EmptyState, Field, PageHeader } from "@/components/ui/kit";
@@ -27,6 +27,12 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
     }),
   ]);
   const filtered = sp.estado ? invoices : invoices.filter((i) => i.period === period);
+  const reminders = await ctx.db
+    .select({ number: t.invoices.number, childName: t.children.firstName, email: t.invoiceReminders.email, stage: t.invoiceReminders.stage, sentAt: t.invoiceReminders.sentAt })
+    .from(t.invoiceReminders)
+    .innerJoin(t.invoices, eq(t.invoices.id, t.invoiceReminders.invoiceId))
+    .innerJoin(t.children, eq(t.children.id, t.invoices.childId))
+    .orderBy(desc(t.invoiceReminders.sentAt)).limit(30);
 
   return (
     <>
@@ -119,6 +125,20 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
           )}
         </Card>
       </div>
+      <Card title="Avisos de cobrança enviados" className="mt-5" pad={false}>
+        {!reminders.length ? (
+          <p className="p-5 text-sm text-ink-soft">Ainda não foram enviados avisos. Ative-os nas definições da instituição.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {reminders.map((r, i) => (
+              <li key={i} className="flex flex-wrap justify-between gap-2 px-5 py-3 text-sm">
+                <span>Fatura {r.number} · {r.childName} · {r.stage} dia(s) após o vencimento</span>
+                <span className="text-ink-soft">{r.email} · {r.sentAt.toISOString().slice(0, 16).replace("T", " ")}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </>
   );
 }

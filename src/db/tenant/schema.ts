@@ -284,10 +284,22 @@ export const settings = pgTable("settings", {
   schoolYear: text("school_year").notNull().default(""),
   invoiceDueDay: integer("invoice_due_day").notNull().default(8),
   paymentInfo: text("payment_info").notNull().default(""),
+  reminderEnabled: boolean("reminder_enabled").notNull().default(false),
+  reminderDays: text("reminder_days").notNull().default("1,7"),
   invoiceCounter: integer("invoice_counter").notNull().default(0),
   receiptCounter: integer("receipt_counter").notNull().default(0),
   updatedAt: updatedAt(),
 });
+
+/** Avisos de cobrança enviados (um por fatura, etapa e encarregado). */
+export const invoiceReminders = pgTable("invoice_reminders", {
+  id: id(),
+  invoiceId: text("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  stage: integer("stage").notNull(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  sentAt: ts("sent_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("reminders_unique_idx").on(t.invoiceId, t.stage, t.userId)]);
 
 export const auditLogs = pgTable("audit_logs", {
   id: id(),

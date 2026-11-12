@@ -4,6 +4,7 @@ import { getTenantDb } from "@/db/tenant";
 import { todayIn } from "@/lib/format";
 import { bootstrapCentral } from "./bootstrap";
 import { generateMonthlyInvoices } from "./finance";
+import { sendOverdueReminders } from "./reminders";
 import { backupInstitution, liveInstitutions, pruneBackups, refreshStats } from "./ops";
 import { runBillingCycle } from "./platform-billing";
 import { resumePendingJobs } from "./provisioning";
@@ -30,6 +31,9 @@ export async function runDailyTasks() {
       if (inst.status !== "SUSPENDED") {
         // Geração mensal automática das mensalidades (idempotente).
         await generateMonthlyInvoices(await getTenantDb(inst.id), today.slice(0, 7), today);
+        // Avisos automáticos de faturas em atraso (email e notificação no portal).
+        const r = await sendOverdueReminders(inst);
+        if (r.sent || r.failed) console.log(`[avisos] ${inst.slug}: ${r.sent} enviados, ${r.failed} falhados`);
       }
       await refreshStats(inst.id);
       await backupInstitution(inst.id, false);

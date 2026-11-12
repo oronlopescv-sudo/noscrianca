@@ -32,6 +32,15 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
               <Field label="Cor de destaque"><input name="accentColor" type="color" className="input h-11 p-1" defaultValue={s.accentColor} disabled={!canWrite} /></Field>
               <Field label="Dados para pagamento" hint="IBAN, referência ou instruções que aparecem nas faturas" className="sm:col-span-2"><textarea name="paymentInfo" className="input min-h-[90px]" maxLength={1000} defaultValue={s.paymentInfo} disabled={!canWrite} /></Field>
             </div>
+            <div className="rounded-xl border border-line p-4 space-y-3">
+              <label className="flex items-center gap-3 text-sm font-medium">
+                <input type="checkbox" name="reminderEnabled" value="1" defaultChecked={s.reminderEnabled} disabled={!canWrite} className="h-4 w-4" />
+                Enviar avisos automáticos de faturas em atraso
+              </label>
+              <Field label="Dias após o vencimento" hint="Separados por vírgula, por exemplo 1,7. Cada aviso é enviado uma só vez por encarregado. Requer email configurado no servidor.">
+                <input name="reminderDays" className="input" maxLength={40} defaultValue={s.reminderDays} disabled={!canWrite} />
+              </Field>
+            </div>
             {canWrite && <div className="flex justify-end"><Submit>Guardar definições</Submit></div>}
           </ActionForm>
         </Card>
