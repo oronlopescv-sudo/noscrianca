@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { and, desc, eq, gte } from "drizzle-orm";
 import { t } from "@/db/tenant";
+import { ChildCalendar, calendarMonth } from "@/components/tenant/child-calendar";
 import { DiaryFeed, type FeedEntry } from "@/components/tenant/diary";
 import { Avatar, Badge, Card, DL, PageHeader } from "@/components/ui/kit";
 import { addDays, ageLabel, fmtDate, fmtTime, todayIn } from "@/lib/format";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const ATT = { none: "Sem registo", in: "Presente", out: "Saiu", absent: "Falta" } as const;
 
-export default async function GuardianChild({ params }: { params: Promise<{ slug: string; id: string }> }) {
+export default async function GuardianChild({ params, searchParams }: { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ mes?: string }> }) {
   const { slug, id } = await params;
   const ctx = await requireTenant(slug, { panel: "GUARDIAN" });
   if (!(await canAccessChild(ctx, id))) notFound();
@@ -45,6 +46,8 @@ export default async function GuardianChild({ params }: { params: Promise<{ slug
             <DL items={[["Nascimento", fmtDate(child.birthDate)], ["Inscrição", fmtDate(child.enrolledAt)], ["Turma", child.classroom?.name ?? "—"]]} />
           </div>
         </Card>
+        <ChildCalendar ctx={ctx} childId={id} month={calendarMonth((await searchParams).mes, today)} basePath={`${ctx.base}/pais/filhos/${id}`}
+          showFinance showAttendance manage={false} />
         <Card title="Presenças (últimos 14 dias)" pad={false}>
           {att.length === 0 ? <div className="card-pad text-sm text-ink-soft">Sem registos neste período.</div> : (
             <ul className="divide-y divide-line">

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { and, desc, eq, gte } from "drizzle-orm";
 import { t } from "@/db/tenant";
+import { ChildCalendar, calendarMonth } from "@/components/tenant/child-calendar";
 import { ChildForm } from "@/components/tenant/child-form";
 import { DiaryFeed, type FeedEntry } from "@/components/tenant/diary";
 import { ActionButton, ActionForm, ConfirmAction, Submit } from "@/components/ui/client";
@@ -16,7 +17,7 @@ import { attState } from "@/components/tenant/attendance";
 
 export const dynamic = "force-dynamic";
 
-export default async function ChildPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
+export default async function ChildPage({ params, searchParams }: { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ mes?: string }> }) {
   const { slug, id } = await params;
   const ctx = await requireTenant(slug, { permission: "children.view" });
   const child = await ctx.db.query.children.findFirst({
@@ -37,7 +38,7 @@ export default async function ChildPage({ params }: { params: Promise<{ slug: st
   const [att, diary, invoices, classrooms, feePlans, allGuardians] = await Promise.all([
     ctx.db.select().from(t.attendance).where(and(eq(t.attendance.childId, id), gte(t.attendance.date, from))).orderBy(desc(t.attendance.date)),
     ctx.can("diary.view") ? ctx.db.query.diaryEntries.findMany({ where: and(eq(t.diaryEntries.childId, id), eq(t.diaryEntries.visible, true)), orderBy: [desc(t.diaryEntries.occurredAt)], limit: 25 }) : Promise.resolve([]),
-    ctx.db.query.invoices.findMany({ where: eq(t.invoices.childId, id), orderBy: [desc(t.invoices.period)], limit: 12 }),
+    ctx.can("finance.view") ? ctx.db.query.invoices.findMany({ where: eq(t.invoices.childId, id), orderBy: [desc(t.invoices.period)], limit: 12 }) : Promise.resolve([]),
     visibleClassrooms(ctx, false),
     ctx.db.query.feePlans.findMany({ orderBy: (f, { asc }) => asc(f.name) }),
     ctx.db.query.guardians.findMany({ with: { user: true }, orderBy: (g, { asc }) => asc(g.createdAt) }),
@@ -65,6 +66,11 @@ export default async function ChildPage({ params }: { params: Promise<{ slug: st
           </ActionButton>
         )}
       />
+
+      <div className="mb-5">
+        <ChildCalendar ctx={ctx} childId={id} month={calendarMonth((await searchParams).mes, today)} basePath={`${ctx.base}/gestao/criancas/${id}`}
+          showFinance={ctx.can("finance.view")} showAttendance={ctx.can("attendance.view")} manage />
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
@@ -202,7 +208,7 @@ export default async function ChildPage({ params }: { params: Promise<{ slug: st
             )}
           </Card>
 
-          <Card title="Mensalidades" pad={false}>
+          {ctx.can("finance.view") && <Card title="Mensalidades" pad={false}>
             {invoices.length === 0 ? <div className="card-pad text-sm text-ink-soft">Sem faturas.</div> : (
               <ul className="divide-y divide-line">
                 {invoices.map((i) => (
@@ -213,7 +219,7 @@ export default async function ChildPage({ params }: { params: Promise<{ slug: st
                 ))}
               </ul>
             )}
-          </Card>
+          </Card>}
         </div>
       </div>
 
