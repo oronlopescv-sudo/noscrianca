@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, gte, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, or } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { AnnouncementList } from "@/components/tenant/announcements";
 import { Avatar, Badge, Card, EmptyState, PageHeader } from "@/components/ui/kit";
@@ -22,7 +22,7 @@ export default async function GuardianHome({ params }: { params: Promise<{ slug:
   const owed = invoices.reduce((s, i) => s + (i.totalCents - i.paidCents), 0);
   const classroomIds = kids.map((k) => k.classroomId).filter((x): x is string => !!x);
   const news = await ctx.db.query.announcements.findMany({
-    where: classroomIds.length ? or(isNull(t.announcements.classroomId), inArray(t.announcements.classroomId, classroomIds)) : isNull(t.announcements.classroomId),
+    where: and(ne(t.announcements.audience, "STAFF"), classroomIds.length ? or(isNull(t.announcements.classroomId), inArray(t.announcements.classroomId, classroomIds)) : isNull(t.announcements.classroomId)),
     orderBy: [desc(t.announcements.createdAt)], limit: 3, with: { classroom: true },
   });
 

@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   "finance.view": "Ver mensalidades, dívidas e relatórios financeiros",
   "finance.manage": "Definir mensalidades, registar pagamentos e emitir recibos",
   "reports.view": "Ver relatórios",
+  "payroll.manage": "Gerir salários da equipa",
   "documents.manage": "Gerir documentos das crianças",
   "settings.manage": "Gerir perfil e definições da instituição",
   "audit.view": "Ver histórico de atividades",
@@ -27,7 +28,7 @@ export const PERMISSION_GROUPS: { label: string; items: Permission[] }[] = [
   { label: "Turmas e equipa", items: ["classrooms.manage", "employees.manage", "roles.manage"] },
   { label: "Dia a dia", items: ["attendance.view", "attendance.record", "diary.view", "diary.record"] },
   { label: "Comunicação", items: ["announcements.manage", "messages.reply"] },
-  { label: "Financeiro", items: ["finance.view", "finance.manage", "reports.view"] },
+  { label: "Financeiro", items: ["finance.view", "finance.manage", "reports.view", "payroll.manage"] },
   { label: "Administração", items: ["settings.manage", "audit.view"] },
 ];
 

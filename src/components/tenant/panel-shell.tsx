@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpen, Briefcase, CalendarCheck, CalendarDays, Baby, FileBarChart, History, Home, LayoutDashboard, Megaphone, MessageSquare, School, Settings, ShieldCheck, Users, Wallet, UserCog, Receipt, UserRound } from "lucide-react";
+import { BookOpen, Briefcase, CalendarCheck, CalendarDays, Baby, FileBarChart, Banknote, History, Home, LayoutDashboard, Megaphone, MessageSquare, School, Settings, ShieldCheck, Users, Wallet, UserCog, Receipt, UserRound } from "lucide-react";
 import { BottomNavShell, SidebarShell, type NavItem } from "@/components/shell";
 import { Notice } from "@/components/ui/kit";
 import { tenantLogoutAction } from "@/server/auth";
@@ -20,6 +20,7 @@ export function managementNav(ctx: TenantCtx): NavItem[] {
   add(ctx.can("employees.manage"), `${b}/gestao/funcionarios`, "Funcionários", ic(<Briefcase size={18} />), "Equipa");
   add(ctx.can("roles.manage"), `${b}/gestao/cargos`, "Cargos e permissões", ic(<UserCog size={18} />), "Equipa");
   add(ctx.can("finance.view"), `${b}/gestao/mensalidades`, "Mensalidades", ic(<Wallet size={18} />), "Financeiro");
+  add(ctx.can("payroll.manage"), `${b}/gestao/salarios`, "Salários", ic(<Banknote size={18} />), "Financeiro");
   add(ctx.can("reports.view"), `${b}/gestao/relatorios`, "Relatórios", ic(<FileBarChart size={18} />), "Financeiro");
   add(ctx.can("announcements.manage"), `${b}/gestao/comunicados`, "Comunicados", ic(<Megaphone size={18} />), "Comunicação");
   add(ctx.can("settings.manage"), `${b}/gestao/definicoes`, "Definições", ic(<Settings size={18} />), "Sistema");
