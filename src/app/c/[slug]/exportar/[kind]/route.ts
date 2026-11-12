@@ -1,6 +1,6 @@
 import { and, asc, gte, isNull, lte } from "drizzle-orm";
 import { t } from "@/db/tenant";
-import { isIsoDate, toCsv } from "@/lib/format";
+import { fmtTime, isIsoDate, toCsv } from "@/lib/format";
 import { INVOICE_STATUS } from "@/lib/labels";
 import { PAYMENT_METHODS } from "@/lib/payment-methods";
 import { childScope, loadTenant } from "@/lib/tenant";
@@ -49,7 +49,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   } else if (kind === "encarregados") {
     header = ["Nome", "Email", "Telefone", "Estado", "Crianças"];
     const gs = await ctx.db.query.guardians.findMany({ with: { user: true, children: { with: { child: true } } }, orderBy: (g, { asc }) => asc(g.createdAt) });
-    rows = gs.map((g) => [g.user.name, g.user.email, g.user.phone, g.user.status, g.children.map((c) => `${c.child.firstName} ${c.child.lastName}`).join(" | ")]);
+    // Mesmo âmbito que as crianças: o staff só vê as famílias das suas turmas.
+    rows = gs.filter((g) => g.children.some((c) => inScope(c.childId)))
+      .map((g) => [g.user.name, g.user.email, g.user.phone, g.user.status, g.children.filter((c) => inScope(c.childId)).map((c) => `${c.child.firstName} ${c.child.lastName}`).join(" | ")]);
   } else if (kind === "faturas") {
     header = ["Número", "Criança", "Tipo", "Período", "Emissão", "Vencimento", `Total (${cur})`, `Pago (${cur})`, "Estado"];
     const inv = await ctx.db.query.invoices.findMany({
@@ -76,7 +78,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       where: and(from ? gte(t.attendance.date, from) : undefined, to ? lte(t.attendance.date, to) : undefined),
       orderBy: [asc(t.attendance.date)], with: { child: true },
     });
-    const fmt = (d: Date | null) => (d ? d.toISOString().slice(11, 16) : "");
+    const tz = ctx.settings.timezone;
+    // Horas no fuso local da instituição (as datas guardam-se em UTC).
+    const fmt = (d: Date | null): string => (d ? fmtTime(d, tz) : "");
     rows = att.filter((a) => inScope(a.childId)).map((a) => [
       a.date, `${a.child.firstName} ${a.child.lastName}`, a.status === "PRESENT" ? "Presente" : "Falta", fmt(a.checkInAt), fmt(a.checkOutAt),
       a.droppedBy, a.pickedBy, a.absenceReason,

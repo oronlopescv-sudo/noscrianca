@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, eq, gt, lt, ne } from "drizzle-orm";
 import { central, c } from "@/db/central";
 import { randomToken, sha256 } from "./crypto";
 import { env } from "./env";
@@ -43,10 +43,12 @@ export async function destroySession(scope: Scope) {
   jar.delete(name);
 }
 
-export async function destroyUserSessions(scope: Scope, userId: string, institutionId?: string) {
+/** Fecha todas as sessões de um utilizador (pode manter a sessão atual). */
+export async function destroyUserSessions(scope: Scope, userId: string, institutionId?: string, exceptTokenHash?: string) {
   await central().delete(c.sessions).where(and(
     eq(c.sessions.scope, scope), eq(c.sessions.userId, userId),
     institutionId ? eq(c.sessions.institutionId, institutionId) : undefined,
+    exceptTokenHash ? ne(c.sessions.tokenHash, exceptTokenHash) : undefined,
   ));
 }
 

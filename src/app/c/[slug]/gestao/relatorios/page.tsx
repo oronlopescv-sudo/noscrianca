@@ -26,11 +26,15 @@ export default async function ReportsPage({ params, searchParams }: { params: Pr
 
   let summary: { received: number; invoiced: number; presentDays: number; kids: number } | null = null;
   if (ctx.can("finance.view") || ctx.can("reports.view")) {
+    // Os totais financeiros respeitam o mesmo âmbito de turmas dos relatórios.
     const [[{ received }], [{ invoiced }], [{ n: presentDays }], [{ n: kids }]] = await Promise.all([
       ctx.db.select({ received: sql<number>`coalesce(sum(${t.payments.amountCents}), 0)::int` }).from(t.payments)
-        .where(and(isNull(t.payments.reversedAt), gte(t.payments.paidAt, de), lte(t.payments.paidAt, ate))),
+        .innerJoin(t.invoices, eq(t.invoices.id, t.payments.invoiceId))
+        .innerJoin(t.children, eq(t.children.id, t.invoices.childId))
+        .where(and(isNull(t.payments.reversedAt), gte(t.payments.paidAt, de), lte(t.payments.paidAt, ate), childScope(ctx))),
       ctx.db.select({ invoiced: sql<number>`coalesce(sum(${t.invoices.totalCents}), 0)::int` }).from(t.invoices)
-        .where(and(gte(t.invoices.issueDate, de), lte(t.invoices.issueDate, ate), sql`${t.invoices.status} <> 'VOID'`)),
+        .innerJoin(t.children, eq(t.children.id, t.invoices.childId))
+        .where(and(gte(t.invoices.issueDate, de), lte(t.invoices.issueDate, ate), sql`${t.invoices.status} <> 'VOID'`, childScope(ctx))),
       ctx.db.select({ n: count() }).from(t.attendance).innerJoin(t.children, eq(t.children.id, t.attendance.childId))
         .where(and(eq(t.attendance.status, "PRESENT"), gte(t.attendance.date, de), lte(t.attendance.date, ate), childScope(ctx))),
       ctx.db.select({ n: count() }).from(t.children).where(and(eq(t.children.status, "ACTIVE"), childScope(ctx))),

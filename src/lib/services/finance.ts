@@ -22,13 +22,20 @@ function dueDateFor(period: string, dueDay: number): string {
 /**
  * Gera as mensalidades de um mês para todas as crianças ativas com plano de
  * preço. Idempotente: nunca cria duas mensalidades para a mesma criança/mês.
+ * Os meses em que a criança esteve desistente (períodos de ausência) não são
+ * faturados; o mês da saída e o mês do regresso mantêm-se faturáveis.
  */
 export async function generateMonthlyInvoices(db: TenantDb, period: string, today: string): Promise<{ created: number; skipped: number }> {
   const settings = await db.query.settings.findFirst({ where: eq(t.settings.id, 1) });
-  const kids = await db.query.children.findMany({ where: eq(t.children.status, "ACTIVE"), with: { feePlan: true } });
+  const kids = await db.query.children.findMany({ where: eq(t.children.status, "ACTIVE"), with: { feePlan: true, inactivePeriods: true } });
   let created = 0, skipped = 0;
   for (const kid of kids) {
     if (!kid.feePlan || !kid.feePlan.active || kid.enrolledAt.slice(0, 7) > period) { skipped++; continue; }
+    const away = kid.inactivePeriods.some((p) => {
+      const from = p.fromDate.slice(0, 7), to = (p.toDate ?? "9999-12").slice(0, 7);
+      return period > from && period < to;
+    });
+    if (away) { skipped++; continue; }
     const made = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`inv:${kid.id}:${period}`}))`);
       const existing = await tx.query.invoices.findFirst({

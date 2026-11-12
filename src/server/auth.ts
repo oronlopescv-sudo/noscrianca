@@ -3,8 +3,8 @@
 import { redirect } from "next/navigation";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { getTenantDb, t } from "@/db/tenant";
-import { clearFailures, createSession, destroySession, destroyUserSessions, lockedFor, passwordProblem, recordFailure } from "@/lib/auth";
-import { hashPassword, sha256, verifyPassword } from "@/lib/crypto";
+import { clearFailures, createSession, destroySession, destroyUserSessions, lockedFor, passwordProblem, readSession, recordFailure } from "@/lib/auth";
+import { burnPasswordCheck, hashPassword, sha256, verifyPassword } from "@/lib/crypto";
 import { sendMail } from "@/lib/mail";
 import { DIRECTOR_KEY } from "@/lib/permissions";
 import { fail, run, str, type ActionResult } from "@/lib/result";
@@ -28,9 +28,11 @@ export async function tenantLoginAction(_p: S, fd: FormData): Promise<ActionResu
     if (mins) fail(`Demasiadas tentativas. Tente novamente dentro de ${mins} min.`);
     const db = await getTenantDb(inst.id);
     const user = await db.query.users.findFirst({ where: and(eq(t.users.email, email), isNull(t.users.deletedAt)), with: { role: true } });
-    const ok = await verifyPassword(str(fd, "password"), user?.passwordHash);
+    const password = str(fd, "password");
+    const ok = await verifyPassword(password, user?.passwordHash);
     if (!user || !ok) {
       await recordFailure(key);
+      if (!user) await burnPasswordCheck(password);
       fail("Email ou palavra-passe incorretos.");
     }
     if (user!.status === "INVITED") fail("A sua conta ainda não foi ativada. Use o link do convite que recebeu.");
@@ -112,6 +114,8 @@ export async function changePasswordAction(_p: S, fd: FormData): Promise<ActionR
     if (problem) fail(problem);
     if (next !== str(fd, "confirm")) fail("As palavras-passe não coincidem.");
     await ctx.db.update(t.users).set({ passwordHash: await hashPassword(next) }).where(eq(t.users.id, ctx.user.id));
+    // Fecha as outras sessões do utilizador (a atual mantém-se).
+    await destroyUserSessions("TENANT", ctx.user.id, ctx.institution.id, (await readSession("TENANT"))?.tokenHash);
     await audit(ctx, "Palavra-passe alterada");
     return { ok: true, message: "Palavra-passe alterada." };
   });

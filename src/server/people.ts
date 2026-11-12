@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, inArray, ne } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import { central, c } from "@/db/central";
 import { t } from "@/db/tenant";
@@ -16,7 +16,8 @@ import { assertChildAccess, audit, tenantAction, type TenantCtx } from "@/lib/te
 
 type S = ActionResult | null;
 const email = z.string().trim().toLowerCase().email("Email inválido.").max(160);
-const personName = z.string().trim().min(2, "Indique o nome.").max(120);
+// Sem quebras de linha: estes campos alimentam o assunto e o corpo de emails.
+const personName = z.string().trim().min(2, "Indique o nome.").max(120).regex(/^[^\r\n\0]+$/, "O nome não pode conter quebras de linha.");
 const optDate = (v: string, label: string) => {
   if (v && !isIsoDate(v)) fail(`${label}: data inválida.`);
   return v || null;
@@ -100,7 +101,18 @@ export async function setChildStatusAction(_p: S, fd: FormData): Promise<ActionR
     const activate = str(fd, "status") === "ACTIVE";
     if (activate) await assertChildCapacity(ctx);
     const today = todayIn(ctx.settings.timezone);
-    await ctx.db.update(t.children).set(activate ? { status: "ACTIVE", leftAt: null } : { status: "INACTIVE", leftAt: today }).where(eq(t.children.id, id));
+    await ctx.db.transaction(async (tx) => {
+      if (activate) {
+        await tx.update(t.children).set({ status: "ACTIVE", leftAt: null }).where(eq(t.children.id, id));
+        // Fechar qualquer período de ausência em aberto (o regresso fatura o mês de regresso).
+        await tx.update(t.childInactivePeriods).set({ toDate: today })
+          .where(and(eq(t.childInactivePeriods.childId, id), isNull(t.childInactivePeriods.toDate)));
+      } else {
+        await tx.update(t.children).set({ status: "INACTIVE", leftAt: today }).where(eq(t.children.id, id));
+        await tx.insert(t.childInactivePeriods).values({ childId: id, fromDate: today })
+          .onConflictDoNothing({ target: [t.childInactivePeriods.childId, t.childInactivePeriods.fromDate] });
+      }
+    });
     await audit(ctx, activate ? "Criança reativada" : "Criança marcada como inativa (saída)", { entity: "child", entityId: id });
     return { ok: true, message: activate ? "Criança reativada." : "Criança marcada como inativa. O histórico mantém-se." };
   });

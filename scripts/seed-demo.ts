@@ -126,6 +126,11 @@ async function seedTenant(db: TenantDb, d: (typeof DEMO)[number]) {
 }
 
 async function main() {
+  // Trava de produção: contas com palavra-passe conhecida não têm negócio num
+  // ambiente real. Em último caso, permitir explicitamente com ALLOW_DEMO_SEED=1.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "1") {
+    throw new Error("seed:demo não corre em produção (NODE_ENV=production). Se realmente quiser, defina ALLOW_DEMO_SEED=1.");
+  }
   for (const d of DEMO) {
     console.log(`\n${d.name} (${d.slug})`);
     const institutionId = await ensureInstitution(d);

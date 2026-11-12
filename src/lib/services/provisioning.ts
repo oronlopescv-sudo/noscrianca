@@ -4,6 +4,7 @@ import type { JobLogEntry } from "@/db/central/schema";
 import { migrateTenant } from "@/db/migrate";
 import { dropTenantPool, getTenantDb, t, tenantUrl } from "@/db/tenant";
 import { decrypt, encrypt, randomToken } from "@/lib/crypto";
+import { env } from "@/lib/env";
 import { sendMail } from "@/lib/mail";
 import { DIRECTOR_KEY, SYSTEM_ROLES } from "@/lib/permissions";
 import { createAuthToken, inviteMail, inviteUrl } from "./accounts";
@@ -43,6 +44,47 @@ const IDENT = /^[a-z][a-z0-9_]{2,62}$/;
 function ident(name: string): string {
   if (!IDENT.test(name)) throw new Error(`Identificador inválido: ${name}`);
   return `"${name}"`;
+}
+
+/** Lista das base de dados a que um tenant nunca deve poder ligar-se (as outras instituições e a central). */
+async function otherDatabases(admin: ReturnType<typeof centralPool>, ownDbName: string): Promise<string[]> {
+  const res = await admin.query(
+    "SELECT datname FROM pg_database WHERE datname <> 'postgres' AND datname NOT LIKE 'template%'",
+  );
+  return ((res.rows ?? []) as { datname: string }[])
+    .filter(({ datname }) => IDENT.test(datname) && datname !== ownDbName)
+    .map(({ datname }) => datname);
+}
+
+/**
+ * Sem CONNECT na central e nas outras instituições: o isolamento não pode
+ * depender apenas da ausência de grants. Idempotente e seguro em qualquer BD já
+ * revogada (REVOKE em tudo o que já está revogado é um no-op).
+ */
+export async function isolateRoleConnect(dbUser: string, ownDbName: string): Promise<void> {
+  const admin = centralPool();
+  for (const d of await otherDatabases(admin, ownDbName)) {
+    await admin.query(`REVOKE CONNECT ON DATABASE ${ident(d)} FROM ${ident(dbUser)}`).catch(() => {});
+  }
+  const centralDb = decodeURIComponent(new URL(env.centralUrl).pathname.replace(/^\/+|\/+$/g, ""));
+  if (centralDb && centralDb !== ownDbName && IDENT.test(centralDb)) {
+    await admin.query(`REVOKE CONNECT ON DATABASE ${ident(centralDb)} FROM ${ident(dbUser)}`).catch(() => {});
+  }
+}
+
+/** Endurece o isolamento das BDs de todos os tenants existentes (manutenção pontual). */
+export async function hardenTenantIsolation(): Promise<number> {
+  const regs = await central().query.tenantDatabases.findMany();
+  let n = 0;
+  for (const reg of regs) {
+    try {
+      await isolateRoleConnect(reg.dbUser, reg.dbName);
+      n++;
+    } catch (e) {
+      console.error(`[isolamento] ${reg.dbName}:`, (e as Error).message);
+    }
+  }
+  return n;
 }
 
 export type NewInstitution = {
@@ -128,6 +170,8 @@ export async function runProvisioning(jobId: string): Promise<{ ok: boolean; err
     const dbExists = (await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [reg.dbName])).rowCount;
     if (!dbExists) await admin.query(`CREATE DATABASE ${ident(reg.dbName)} OWNER ${ident(reg.dbUser)} ENCODING 'UTF8' TEMPLATE template0`);
     await admin.query(`REVOKE ALL ON DATABASE ${ident(reg.dbName)} FROM PUBLIC`);
+    // A role da instituição não se liga a mais nenhuma base de dados.
+    await isolateRoleConnect(reg.dbUser, reg.dbName);
     await setStep(jobId, log, 2, "done", reg.dbName);
 
     // 3. Migrations

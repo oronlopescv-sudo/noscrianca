@@ -128,6 +128,18 @@ export const children = pgTable("children", {
   updatedAt: updatedAt(),
 }, (t) => [index("children_classroom_idx").on(t.classroomId), index("children_status_idx").on(t.status)]);
 
+/**
+ * Períodos de ausência de uma criança (saída → regresso), para as mensalidades
+ * nunca serem geradas para meses em que esteve desistente. O mês da saída e o
+ * mês do regresso mantêm-se faturáveis; toDate em aberto significa "ainda fora".
+ */
+export const childInactivePeriods = pgTable("child_inactive_periods", {
+  childId: text("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  fromDate: text("from_date").notNull(),
+  toDate: text("to_date"),
+  createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.childId, t.fromDate] })]);
+
 export const childGuardians = pgTable("child_guardians", {
   childId: text("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
   guardianId: text("guardian_id").notNull().references(() => guardians.id, { onDelete: "cascade" }),
@@ -328,6 +340,7 @@ export const childrenRelations = relations(children, ({ one, many }) => ({
   classroom: one(classrooms, { fields: [children.classroomId], references: [classrooms.id] }),
   feePlan: one(feePlans, { fields: [children.feePlanId], references: [feePlans.id] }),
   guardians: many(childGuardians),
+  inactivePeriods: many(childInactivePeriods),
   pickups: many(authorizedPickups),
   attendance: many(attendance),
   diary: many(diaryEntries),
@@ -337,6 +350,9 @@ export const childrenRelations = relations(children, ({ one, many }) => ({
 export const childGuardiansRelations = relations(childGuardians, ({ one }) => ({
   child: one(children, { fields: [childGuardians.childId], references: [children.id] }),
   guardian: one(guardians, { fields: [childGuardians.guardianId], references: [guardians.id] }),
+}));
+export const childInactivePeriodsRelations = relations(childInactivePeriods, ({ one }) => ({
+  child: one(children, { fields: [childInactivePeriods.childId], references: [children.id] }),
 }));
 export const pickupsRelations = relations(authorizedPickups, ({ one }) => ({
   child: one(children, { fields: [authorizedPickups.childId], references: [children.id] }),

@@ -36,15 +36,17 @@ export async function issueInvoiceIfDue(inst: Institution, now = new Date()): Pr
 
   const amount = inst.billingCycle === "YEARLY" ? plan.priceYearlyCents : plan.priceMonthlyCents;
   const base = start > now ? start : now;
-  await central().insert(c.platformInvoices).values({
+  // Índice único (institution, periodStart) garante uma fatura por período
+  // mesmo em emissões concorrentes (manual + ciclo diário).
+  const [made] = await central().insert(c.platformInvoices).values({
     number: await nextInvoiceNumber(),
     institutionId: inst.id,
     description: `Plano ${plan.name} — ${inst.billingCycle === "YEARLY" ? "anual" : "mensal"}`,
     periodStart: start, periodEnd: addCycle(start, inst.billingCycle),
     amountCents: amount, currency: settings.billingCurrency,
     dueDate: new Date(base.getTime() + settings.invoiceDueDays * DAY),
-  });
-  return true;
+  }).onConflictDoNothing({ target: [c.platformInvoices.institutionId, c.platformInvoices.periodStart] }).returning();
+  return !!made;
 }
 
 /** Ciclo diário: emite faturas, marca atrasos (PAST_DUE) e suspende após o período de tolerância. */
