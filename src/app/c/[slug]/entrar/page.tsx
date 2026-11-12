@@ -16,7 +16,7 @@ export default async function TenantLogin({ params }: { params: Promise<{ slug: 
   if ((await loadTenant(slug)).ok) redirect(`/c/${slug}`);
   return (
     <AuthCard name={b.name} logoSrc={b.logoSrc} title="Iniciar sessão" subtitle="Direção, funcionários e encarregados de educação."
-      footer={<Link href="/entrar" className="hover:text-white">Não é a sua instituição? Procurar outra</Link>}>
+      footer={<Link href="/" className="hover:text-white">Não é a sua instituição? Escolher outra</Link>}>
       <ActionForm action={tenantLoginAction} hidden={{ slug }} className="space-y-4" resetOnSuccess={false}>
         <Field label="Email"><input name="email" type="email" className="input" required autoComplete="username" /></Field>
         <Field label="Palavra-passe"><input name="password" type="password" className="input" required autoComplete="current-password" /></Field>
