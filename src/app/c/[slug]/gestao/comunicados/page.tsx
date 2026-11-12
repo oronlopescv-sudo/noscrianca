@@ -13,7 +13,7 @@ export default async function AnnouncementsPage({ params }: { params: Promise<{ 
     ctx.db.query.announcements.findMany({ orderBy: [desc(t.announcements.createdAt)], limit: 100, with: { classroom: true } }),
     visibleClassrooms(ctx),
   ]);
-  const items = rows.map((r) => ({ id: r.id, title: r.title, body: r.body, classroomName: r.classroom?.name ?? null, createdByName: r.createdByName, createdAt: r.createdAt }));
+  const items = rows.map((r) => ({ id: r.id, title: r.title, body: r.body, classroomName: r.classroom?.name ?? null, createdByName: r.createdByName, createdAt: r.createdAt, audience: r.audience }));
   const canWrite = !ctx.readOnly;
   return (
     <>

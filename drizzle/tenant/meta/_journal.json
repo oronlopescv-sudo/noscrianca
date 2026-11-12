@@ -29,6 +29,20 @@
       "when": 1794496719821,
       "tag": "0003_pagina_publica",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794497137351,
+      "tag": "0004_comunicados_destinatarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794497185546,
+      "tag": "0005_salarios",
+      "breakpoints": true
     }
   ]
 }

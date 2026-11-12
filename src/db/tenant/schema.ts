@@ -1,5 +1,5 @@
 // BD DE CADA INSTITUIÇÃO — uma base de dados PostgreSQL independente por creche.
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createId } from "@paralleldrive/cuid2";
 
@@ -65,9 +65,30 @@ export const employees = pgTable("employees", {
   schedule: text("schedule").notNull().default(""),
   address: text("address").notNull().default(""),
   notes: text("notes").notNull().default(""),
+  /** Salário mensal base (em cêntimos). null = ainda não definido. */
+  salaryCents: integer("salary_cents"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/** Salários pagos pela instituição a cada funcionário (um pagamento válido por mês). */
+export const salaryPayments = pgTable("salary_payments", {
+  id: id(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+  period: text("period").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  paidAt: text("paid_at").notNull(),
+  method: paymentMethod("method").notNull(),
+  notes: text("notes").notNull().default(""),
+  recordedById: text("recorded_by_id").notNull(),
+  recordedByName: text("recorded_by_name").notNull(),
+  voidedAt: ts("voided_at"),
+  voidedByName: text("voided_by_name"),
+  createdAt: createdAt(),
+}, (t) => [
+  uniqueIndex("salary_employee_period_uq").on(t.employeeId, t.period).where(sql`${t.voidedAt} is null`),
+  index("salary_period_idx").on(t.period),
+]);
 
 export const guardians = pgTable("guardians", {
   id: id(),
@@ -233,6 +254,8 @@ export const announcements = pgTable("announcements", {
   title: text("title").notNull(),
   body: text("body").notNull(),
   classroomId: text("classroom_id").references(() => classrooms.id, { onDelete: "set null" }),
+  /** Quem vê o comunicado: ALL (pais e equipa), GUARDIANS (só pais) ou STAFF (só equipa). */
+  audience: text("audience").notNull().default("ALL"),
   createdById: text("created_by_id").notNull(),
   createdByName: text("created_by_name").notNull(),
   createdAt: createdAt(),
