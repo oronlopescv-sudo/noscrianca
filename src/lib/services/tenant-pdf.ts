@@ -3,6 +3,7 @@ import { t, type TenantDb } from "@/db/tenant";
 import type { Setting } from "@/db/tenant/schema";
 import { fmtDate, fmtDateObj, money, periodLabel } from "@/lib/format";
 import { buildDocPdf } from "@/lib/pdf";
+import { dailyRateCents, payslipBreakdown } from "@/lib/payslip";
 import { METHOD_LABELS } from "./finance";
 
 function issuer(s: Setting) {
@@ -58,6 +59,15 @@ export function salaryReceiptNumber(p: { id: string; period: string }): string {
   return `RV-${p.period}-${p.id.slice(-6).toUpperCase()}`;
 }
 
+/** Linhas do recibo: salário base, desconto por faltas e ajuste manual (se existir). */
+function salaryItems(p: { period: string; amountCents: number; baseCents: number | null; absentDays: number; absenceDiscountCents: number }, cur: string) {
+  const b = payslipBreakdown(p);
+  const items = [{ description: `Salário base de ${periodLabel(p.period)}`, amount: money(b.base, cur) }];
+  if (b.discount > 0) items.push({ description: `Desconto por ${b.absentDays} falta(s) (1 dia = ${money(dailyRateCents(b.base), cur)})`, amount: money(-b.discount, cur) });
+  if (b.adjustment !== 0) items.push({ description: "Outros ajustes (ver notas)", amount: money(b.adjustment, cur) });
+  return items;
+}
+
 /** Recibo de vencimento de um pagamento de salário. */
 export async function salaryReceiptPdf(db: TenantDb, s: Setting, paymentId: string) {
   const p = await db.query.salaryPayments.findFirst({ where: eq(t.salaryPayments.id, paymentId) });
@@ -69,7 +79,7 @@ export async function salaryReceiptPdf(db: TenantDb, s: Setting, paymentId: stri
     kind: "RECIBO DE VENCIMENTO", number, accent: s.accentColor, issuer: issuer(s),
     recipient: { title: "Pago a", lines: [emp.user.name, emp.jobTitle || emp.user.role?.name || "", emp.user.email] },
     meta: [["Mês de referência", periodLabel(p.period)], ["Data do pagamento", fmtDate(p.paidAt)], ["Método", METHOD_LABELS[p.method]]],
-    items: [{ description: `Salário de ${periodLabel(p.period)}`, amount: money(p.amountCents, s.currency) }],
+    items: salaryItems(p, s.currency),
     totals: [["Valor pago", money(p.amountCents, s.currency)]],
     stamp: p.voidedAt ? "ANULADO" : "PAGO",
     note: [p.notes, `Registado por ${p.recordedByName}.`, p.voidedAt ? `Anulado por ${p.voidedByName ?? ""}.` : ""].filter(Boolean).join("\n"),

@@ -77,6 +77,11 @@ export const salaryPayments = pgTable("salary_payments", {
   employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
   period: text("period").notNull(),
   amountCents: integer("amount_cents").notNull(),
+  /** Salário base do mês no momento do pagamento (null = pagamento anterior a este registo). */
+  baseCents: integer("base_cents"),
+  /** Dias de falta descontados neste mês e o valor descontado (ficam registados no recibo). */
+  absentDays: integer("absent_days").notNull().default(0),
+  absenceDiscountCents: integer("absence_discount_cents").notNull().default(0),
   paidAt: text("paid_at").notNull(),
   method: paymentMethod("method").notNull(),
   notes: text("notes").notNull().default(""),
@@ -377,6 +382,17 @@ export const staffLeaves = pgTable("staff_leaves", {
   createdAt: createdAt(),
 }, (t) => [index("leaves_employee_idx").on(t.employeeId), index("leaves_status_idx").on(t.status)]);
 
+/** Faltas da equipa registadas no calendário. As que "descontam" reduzem o salário do mês (1/30 por dia). */
+export const staffAbsences = pgTable("staff_absences", {
+  id: id(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+  date: text("date").notNull(),
+  deductible: boolean("deductible").notNull().default(true),
+  reason: text("reason").notNull().default(""),
+  recordedByName: text("recorded_by_name").notNull(),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("staff_absence_employee_date_uq").on(t.employeeId, t.date), index("staff_absence_date_idx").on(t.date)]);
+
 /** Fotografias da página pública da instituição (visíveis a qualquer visitante). */
 export const publicPhotos = pgTable("public_photos", {
   id: id(),
@@ -476,6 +492,9 @@ export const eventsRelations = relations(events, ({ one }) => ({
 }));
 export const staffLeavesRelations = relations(staffLeaves, ({ one }) => ({
   employee: one(employees, { fields: [staffLeaves.employeeId], references: [employees.id] }),
+}));
+export const staffAbsencesRelations = relations(staffAbsences, ({ one }) => ({
+  employee: one(employees, { fields: [staffAbsences.employeeId], references: [employees.id] }),
 }));
 export const announcementsRelations = relations(announcements, ({ one }) => ({
   classroom: one(classrooms, { fields: [announcements.classroomId], references: [classrooms.id] }),

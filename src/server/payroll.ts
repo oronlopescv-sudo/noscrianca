@@ -6,7 +6,9 @@ import type { PaymentMethod } from "@/db/tenant/schema";
 import { isIsoDate, isPeriod, money, parseMoney, periodLabel, todayIn } from "@/lib/format";
 import { mailConfigured, sendMail } from "@/lib/mail";
 import { bool, fail, run, str, type ActionResult } from "@/lib/result";
+import { absenceDiscountCents } from "@/lib/payslip";
 import { METHOD_LABELS } from "@/lib/services/finance";
+import { countDeductibleAbsences } from "@/lib/services/staff-absences";
 import { salaryReceiptPdf } from "@/lib/services/tenant-pdf";
 import { audit, notify, tenantAction, type TenantCtx } from "@/lib/tenant";
 
@@ -64,8 +66,12 @@ export async function paySalaryAction(_p: S, fd: FormData): Promise<ActionResult
     if (!isPeriod(period)) fail("Mês inválido.");
     const emp = await ctx.db.query.employees.findFirst({ where: eq(t.employees.id, str(fd, "employeeId")), with: { user: true } });
     if (!emp) fail("Funcionário não encontrado.");
+    // Desconto automático: 1/30 do salário base por cada falta que desconta neste mês.
+    const baseCents = emp!.salaryCents ?? null;
+    const absentDays = await countDeductibleAbsences(ctx.db, emp!.id, period);
+    const discountCents = baseCents !== null ? absenceDiscountCents(baseCents, absentDays) : 0;
     const raw = str(fd, "amount");
-    const amountCents = raw ? parseMoney(raw) : emp!.salaryCents;
+    const amountCents = raw ? parseMoney(raw) : baseCents !== null ? baseCents - discountCents : null;
     if (amountCents === null || amountCents === undefined || amountCents <= 0) fail("Indique o valor pago (ou defina primeiro o salário base).");
     const method = (str(fd, "method") || "TRANSFER") as PaymentMethod;
     if (!(method in METHOD_LABELS)) fail("Forma de pagamento inválida.");
@@ -75,7 +81,8 @@ export async function paySalaryAction(_p: S, fd: FormData): Promise<ActionResult
     const existing = await ctx.db.query.salaryPayments.findFirst({ where: and(eq(t.salaryPayments.employeeId, emp!.id), eq(t.salaryPayments.period, period), isNull(t.salaryPayments.voidedAt)) });
     if (existing) fail(`O salário de ${periodLabel(period)} já está marcado como pago.`);
     const [pay] = await ctx.db.insert(t.salaryPayments).values({
-      employeeId: emp!.id, period, amountCents: amountCents!, paidAt, method, notes: str(fd, "notes").slice(0, 300), recordedById: ctx.user.id, recordedByName: ctx.user.name,
+      employeeId: emp!.id, period, amountCents: amountCents!, baseCents, absentDays, absenceDiscountCents: discountCents,
+      paidAt, method, notes: str(fd, "notes").slice(0, 300), recordedById: ctx.user.id, recordedByName: ctx.user.name,
     }).returning();
     const value = money(amountCents!, ctx.settings.currency);
     await audit(ctx, "Salário pago", { entity: "salaryPayment", entityId: pay.id, details: { funcionario: emp!.user.name, mes: period, valor: value, metodo: METHOD_LABELS[method] } });

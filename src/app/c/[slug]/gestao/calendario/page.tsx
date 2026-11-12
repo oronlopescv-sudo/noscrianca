@@ -4,6 +4,8 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui/kit";
 import { t } from "@/db/tenant";
 import { money, todayIn } from "@/lib/format";
+import { AbsenceList, RegisterAbsenceModal } from "@/components/tenant/staff-absences";
+import { absencesInMonth } from "@/lib/services/staff-absences";
 import { childScope, requireTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +23,8 @@ export default async function MonthlyCalendar({ params, searchParams }: { params
   const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT" });
   const canAttendance = ctx.can("attendance.view");
   const canFinance = ctx.can("finance.view");
-  if (!canAttendance && !canFinance) notFound();
+  const canPayroll = ctx.can("payroll.manage");
+  if (!canAttendance && !canFinance && !canPayroll) notFound();
 
   const sp = await searchParams;
   const today = todayIn(ctx.settings.timezone);
@@ -48,6 +51,17 @@ export default async function MonthlyCalendar({ params, searchParams }: { params
         where: and(inArray(t.invoices.childId, ids), eq(t.invoices.period, ym), eq(t.invoices.kind, "MONTHLY"), isNull(t.invoices.voidedAt)),
       })
     : [];
+
+  // Faltas da equipa do mês (só para quem gere salários): por dia, com os nomes para o calendário.
+  const canStaffWrite = canPayroll && !ctx.readOnly;
+  const staffRows = canPayroll ? await absencesInMonth(ctx.db, ym) : [];
+  const staffOptions = canStaffWrite
+    ? (await ctx.db.query.employees.findMany({ with: { user: true } }))
+        .filter((e) => !e.user.deletedAt && e.user.status !== "SUSPENDED")
+        .map((e) => ({ id: e.id, name: e.user.name }))
+    : [];
+  const staffByDay = new Map<string, string[]>();
+  for (const r of staffRows) staffByDay.set(r.date, [...(staffByDay.get(r.date) ?? []), r.employee.user.name.split(" ")[0]]);
 
   // Contagem por dia (presentes e faltas) e por criança (dias de presença e faltas).
   const perDay = new Map<string, { present: number; absent: number }>();
@@ -78,8 +92,8 @@ export default async function MonthlyCalendar({ params, searchParams }: { params
         <Link href={`${base}?mes=${next}`} className="btn btn-secondary btn-sm">{MONTHS[Number(next.split("-")[1]) - 1]} →</Link>
       </div>
 
-      {canAttendance && (
-        <Card title="Presenças do mês" pad={false} className="mb-5">
+      {(canAttendance || canPayroll) && (
+        <Card title={canAttendance ? "Presenças do mês" : "Calendário do mês"} pad={false} className="mb-5">
           <div className="grid grid-cols-7 gap-px bg-line/60 text-center text-xs">
             {WEEK.map((w) => <div key={w} className="bg-surface px-1 py-2 font-medium text-ink-soft">{w}</div>)}
             {cells.map((day, i) => {
@@ -90,10 +104,16 @@ export default async function MonthlyCalendar({ params, searchParams }: { params
               return (
                 <div key={i} className={`min-h-[64px] bg-white p-1.5 text-left ${isToday ? "ring-2 ring-accent ring-inset" : ""}`}>
                   <p className={`text-xs font-semibold ${isToday ? "text-accent" : ""}`}>{day}</p>
-                  {d && (
+                  {canAttendance && d && (
                     <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
                       <p className="text-emerald-700">{d.present} presentes</p>
                       {d.absent > 0 && <p className="text-red-700">{d.absent} faltas</p>}
+                    </div>
+                  )}
+                  {canPayroll && staffByDay.get(key) && (
+                    <div className="mt-1 text-[11px] leading-tight">
+                      <p className="font-medium text-red-700">{staffByDay.get(key)!.length} falta(s) da equipa</p>
+                      <p className="truncate text-ink-soft">{staffByDay.get(key)!.join(", ")}</p>
                     </div>
                   )}
                 </div>
@@ -103,6 +123,12 @@ export default async function MonthlyCalendar({ params, searchParams }: { params
         </Card>
       )}
 
+      {canPayroll && (
+        <Card title={`Faltas da equipa · ${MONTHS[m - 1]}`} pad={false} className="mb-5"
+          actions={canStaffWrite && <RegisterAbsenceModal ctx={ctx} employees={staffOptions} defaultDate={ym === today.slice(0, 7) ? today : `${ym}-01`} />}>
+          <AbsenceList ctx={ctx} rows={staffRows} showEmployee canWrite={canStaffWrite} />
+        </Card>
+      )}
       <Card title="Crianças neste mês" pad={false}>
         {kids.length === 0 ? (
           <EmptyState title="Sem crianças" text="Não há crianças ativas visíveis para o seu perfil." />
