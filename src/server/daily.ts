@@ -4,12 +4,18 @@ import { and, eq, inArray } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { t } from "@/db/tenant";
 import type { DiaryType } from "@/db/tenant/schema";
-import { isIsoDate, todayIn } from "@/lib/format";
+import { fmtTime, isIsoDate, todayIn } from "@/lib/format";
 import { bool, fail, file, run, str, type ActionResult } from "@/lib/result";
 import { deleteTenantFile, saveUpload } from "@/lib/storage";
 import { assertChildAccess, childScope, tenantAction, type TenantCtx } from "@/lib/tenant";
 
 type S = ActionResult | null;
+
+/** Presença já registada neste dia (se existir). Evita sobrepor horas registadas sem aviso. */
+async function todayRow(ctx: TenantCtx, childId: string, date: string) {
+  return ctx.db.query.attendance.findFirst({ where: and(eq(t.attendance.childId, childId), eq(t.attendance.date, date)) });
+}
+
 const DIARY_TYPES: DiaryType[] = ["MEAL", "SLEEP", "HYGIENE", "ACTIVITY", "INCIDENT", "NOTE", "PHOTO"];
 
 function attendanceDate(ctx: TenantCtx, raw: string): string {
@@ -48,6 +54,8 @@ export async function checkInAction(_p: S, fd: FormData): Promise<ActionResult> 
     const ctx = await tenantAction(str(fd, "slug"), { permission: "attendance.record" });
     const child = await activeChild(ctx, str(fd, "childId"));
     const date = attendanceDate(ctx, str(fd, "date"));
+    const prev = await todayRow(ctx, child.id, date);
+    if (prev?.checkInAt) fail(`${child.firstName} já tem entrada registada às ${fmtTime(prev.checkInAt, ctx.settings.timezone)}. Para corrigir, limpe a presença primeiro.`);
     const at = moment(date, str(fd, "time"), ctx);
     const values = { status: "PRESENT" as const, checkInAt: at, checkInBy: ctx.user.name, droppedBy: str(fd, "droppedBy").slice(0, 120), absenceReason: "" };
     await ctx.db.insert(t.attendance).values({ childId: child.id, date, ...values })
@@ -63,6 +71,7 @@ export async function checkOutAction(_p: S, fd: FormData): Promise<ActionResult>
     const date = attendanceDate(ctx, str(fd, "date"));
     const row = await ctx.db.query.attendance.findFirst({ where: and(eq(t.attendance.childId, child.id), eq(t.attendance.date, date)) });
     if (!row || row.status !== "PRESENT" || !row.checkInAt) fail("Registe primeiro a entrada.");
+    if (row.checkOutAt) fail(`${child.firstName} já tem saída registada às ${fmtTime(row.checkOutAt, ctx.settings.timezone)}. Para corrigir, limpe a presença primeiro.`);
     const at = moment(date, str(fd, "time"), ctx);
     if (at < row!.checkInAt!) fail("A saída não pode ser anterior à entrada.");
     await ctx.db.update(t.attendance).set({ checkOutAt: at, checkOutBy: ctx.user.name, pickedBy: str(fd, "pickedBy").slice(0, 120) }).where(eq(t.attendance.id, row!.id));
@@ -75,6 +84,8 @@ export async function markAbsentAction(_p: S, fd: FormData): Promise<ActionResul
     const ctx = await tenantAction(str(fd, "slug"), { permission: "attendance.record" });
     const child = await activeChild(ctx, str(fd, "childId"));
     const date = attendanceDate(ctx, str(fd, "date"));
+    const prev = await todayRow(ctx, child.id, date);
+    if (prev?.checkInAt) fail(`${child.firstName} tem entrada registada às ${fmtTime(prev.checkInAt, ctx.settings.timezone)}. Limpe a presença antes de marcar falta.`);
     const values = { status: "ABSENT" as const, checkInAt: null, checkInBy: null, droppedBy: "", checkOutAt: null, checkOutBy: null, pickedBy: "", absenceReason: str(fd, "reason").slice(0, 200) };
     await ctx.db.insert(t.attendance).values({ childId: child.id, date, ...values })
       .onConflictDoUpdate({ target: [t.attendance.childId, t.attendance.date], set: values });
