@@ -70,7 +70,8 @@ export default async function PublicInstitution({ params, searchParams }: { para
           </div>
           <div className="flex flex-col gap-2 sm:items-end">
             {inst.status !== "SUSPENDED" && <a href="#inscricao" className="btn bg-white px-6 font-semibold text-ink hover:bg-white/90">Pedir inscrição</a>}
-            <Link href={`/c/${slug}/entrar`} className="btn border border-white/50 px-6 text-white hover:bg-white/10">Entrar na área reservada</Link>
+            <Link href={`/c/${slug}/entrar`} className="btn border border-white/50 px-6 text-white hover:bg-white/10">Entrar</Link>
+            <p className="text-xs opacity-90">Direção, equipa e encarregados</p>
           </div>
         </div>
       </section>

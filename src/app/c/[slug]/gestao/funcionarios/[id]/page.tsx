@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import { LeavesAdmin } from "@/components/tenant/leaves-admin";
+import { AbsenceList, RegisterAbsenceModal } from "@/components/tenant/staff-absences";
 import { ActionForm, ConfirmAction, Modal, Submit } from "@/components/ui/client";
 import { Avatar, Badge, Card, Check, DL, Field, PageHeader } from "@/components/ui/kit";
 import { t } from "@/db/tenant";
 import { fmtDate, money, periodLabel, todayIn } from "@/lib/format";
 import { USER_STATUS } from "@/lib/labels";
+import { absenceDiscountCents } from "@/lib/payslip";
+import { absencesInYear, deductibleDaysByMonth } from "@/lib/services/staff-absences";
 import { salaryReceiptNumber } from "@/lib/services/tenant-pdf";
 import { requireTenant } from "@/lib/tenant";
 import { paySalaryAction, sendSalaryReceiptAction, setSalaryAction, voidSalaryPaymentAction } from "@/server/payroll";
@@ -31,6 +34,8 @@ export default async function EmployeeProfile({ params, searchParams }: { params
     ? await ctx.db.query.salaryPayments.findMany({ where: eq(t.salaryPayments.employeeId, emp.id), orderBy: [desc(t.salaryPayments.createdAt)] })
     : [];
   const paid = new Map(payments.filter((p) => !p.voidedAt).map((p) => [p.period, p]));
+  const absences = canPayroll ? await absencesInYear(ctx.db, emp.id, String(year)) : [];
+  const absDays = deductibleDaysByMonth(absences);
   const start = (emp.hireDate ?? emp.createdAt.toISOString().slice(0, 10)).slice(0, 7);
   const current = today.slice(0, 7);
   const yearTotal = [...paid.values()].filter((p) => p.period.startsWith(String(year))).reduce((a, p) => a + p.amountCents, 0);
@@ -86,6 +91,9 @@ export default async function EmployeeProfile({ params, searchParams }: { params
                     const p = paid.get(ym);
                     const future = ym > current;
                     const due = !p && !!emp.salaryCents && ym >= start && !future;
+                    const days = absDays.get(ym) ?? 0;
+                    const discount = emp.salaryCents ? absenceDiscountCents(emp.salaryCents, days) : 0;
+                    const suggested = emp.salaryCents ? emp.salaryCents - discount : null;
                     return (
                       <li key={ym} className={`p-3 ${p ? "bg-emerald-50" : due ? "bg-red-50" : "bg-white"}`}>
                         <div className="flex items-center justify-between gap-2">
@@ -93,6 +101,11 @@ export default async function EmployeeProfile({ params, searchParams }: { params
                           {p ? <Badge tone="green">Pago</Badge> : due ? <Badge tone="red">Não pago</Badge> : <Badge>—</Badge>}
                         </div>
                         <p className="mt-1.5 text-xs text-ink-soft">{p ? `${money(p.amountCents, cur)} · pago a ${fmtDate(p.paidAt)} · ${salaryReceiptNumber(p)}` : future ? "Ainda não chegou" : due ? "A aguardar pagamento" : "Sem lançamento"}</p>
+                        {(p ? p.absentDays : days) > 0 && (
+                          <p className="mt-1 text-xs text-red-700">
+                            {p ? p.absentDays : days} falta(s) {p ? "descontadas" : "registadas"} · {p ? `desconto de ${money(p.absenceDiscountCents, cur)}` : `desconto previsto de ${money(discount, cur)}`}
+                          </p>
+                        )}
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {p && <a href={`${ctx.base}/recibo-salario/${p.id}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">Recibo PDF</a>}
                           {p && canWrite && <ConfirmAction action={sendSalaryReceiptAction} hidden={{ slug, paymentId: p.id }} label="Enviar recibo" triggerClass="btn-secondary btn-sm" title="Enviar recibo de vencimento" text={`O recibo de ${periodLabel(ym)} é enviado em PDF para ${emp.user.email}, com um aviso na aplicação.`} confirmLabel="Enviar recibo" />}
@@ -100,8 +113,8 @@ export default async function EmployeeProfile({ params, searchParams }: { params
                           {!p && !future && canWrite && (
                             <Modal title={`Lançar ${periodLabel(ym)} · ${emp.user.name}`} trigger="Lançar pagamento" triggerClass="btn-primary btn-sm">
                               <ActionForm action={paySalaryAction} hidden={{ slug, employeeId: emp.id, period: ym }} className="space-y-4">
-                                <Field label={`Quantia recebida (${cur})`} hint={emp.salaryCents ? "Vem preenchida com o salário base; altere se o valor do mês foi outro" : undefined}>
-                                  <input name="amount" className="input" inputMode="decimal" required defaultValue={emp.salaryCents ? String(emp.salaryCents / 100) : ""} />
+                                <Field label={`Quantia recebida (${cur})`} hint={suggested !== null ? (days > 0 ? `Salário base menos ${days} falta(s) (−${money(discount, cur)}). Altere se o valor do mês foi outro.` : "Vem preenchida com o salário base; altere se o valor do mês foi outro") : undefined}>
+                                  <input name="amount" className="input" inputMode="decimal" required defaultValue={suggested !== null ? String(suggested / 100) : ""} />
                                 </Field>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <Field label="Data do pagamento"><input name="paidAt" type="date" className="input" required defaultValue={today} max={today} /></Field>
@@ -122,6 +135,10 @@ export default async function EmployeeProfile({ params, searchParams }: { params
                     );
                   })}
                 </ul>
+              </Card>
+
+              <Card pad={false} title={`Faltas de ${year}`} actions={canWrite && <RegisterAbsenceModal ctx={ctx} employeeId={emp.id} defaultDate={today} />}>
+                <AbsenceList ctx={ctx} rows={absences} showEmployee={false} canWrite={canWrite} />
               </Card>
 
               {payments.some((p) => p.voidedAt) && (

@@ -4,6 +4,8 @@ import { ActionForm, ConfirmAction, Modal, Submit } from "@/components/ui/client
 import { Badge, Card, EmptyState, Field, PageHeader, Stat } from "@/components/ui/kit";
 import { t } from "@/db/tenant";
 import { fmtDate, isPeriod, money, periodLabel, todayIn } from "@/lib/format";
+import { absenceDiscountCents } from "@/lib/payslip";
+import { absencesInMonth } from "@/lib/services/staff-absences";
 import { requireTenant } from "@/lib/tenant";
 import { paySalaryAction, setSalaryAction, voidSalaryPaymentAction } from "@/server/payroll";
 
@@ -29,6 +31,9 @@ export default async function PayrollPage({ params, searchParams }: { params: Pr
   ]);
   const staff = employees.filter((e) => !e.user.deletedAt && e.user.status !== "SUSPENDED");
   const paidOf = new Map(payments.map((p) => [p.employeeId, p]));
+  // Faltas que descontam neste mês, por funcionário (o desconto é 1/30 do salário base por dia).
+  const daysOf = new Map<string, number>();
+  for (const a of await absencesInMonth(ctx.db, period)) if (a.deductible) daysOf.set(a.employeeId, (daysOf.get(a.employeeId) ?? 0) + 1);
   const totalDue = staff.reduce((a, e) => a + (e.salaryCents ?? 0), 0);
   const totalPaid = payments.reduce((a, p) => a + p.amountCents, 0);
   const base = `${ctx.base}/gestao/salarios`;
@@ -55,13 +60,20 @@ export default async function PayrollPage({ params, searchParams }: { params: Pr
               <tbody>
                 {staff.map((e) => {
                   const pay = paidOf.get(e.id);
+                  const days = daysOf.get(e.id) ?? 0;
+                  const discount = e.salaryCents ? absenceDiscountCents(e.salaryCents, days) : 0;
                   return (
                     <tr key={e.id} className={pay ? "bg-emerald-50/60" : e.salaryCents ? "bg-red-50/60" : undefined}>
                       <td>
                         <Link href={`${ctx.base}/gestao/funcionarios/${e.id}`} className="font-medium hover:text-accent">{e.user.name}</Link>
                         <p className="text-xs text-ink-soft">{e.user.role?.name ?? "Sem cargo"}{e.jobTitle ? ` · ${e.jobTitle}` : ""}</p>
                       </td>
-                      <td>{e.salaryCents ? money(e.salaryCents, cur) : <span className="text-ink-soft">Por definir</span>}</td>
+                      <td>
+                        {e.salaryCents ? money(e.salaryCents, cur) : <span className="text-ink-soft">Por definir</span>}
+                        {(pay ? pay.absentDays : days) > 0 && (
+                          <p className="text-xs text-red-700">{pay ? pay.absentDays : days} falta(s) · −{money(pay ? pay.absenceDiscountCents : discount, cur)}</p>
+                        )}
+                      </td>
                       <td>
                         {pay ? <><Badge tone="green">Pago</Badge><p className="mt-1 text-xs text-ink-soft">{money(pay.amountCents, cur)} · {fmtDate(pay.paidAt)}</p></>
                           : e.salaryCents ? <Badge tone="red">Não pago</Badge> : <Badge>Sem salário definido</Badge>}
@@ -72,8 +84,8 @@ export default async function PayrollPage({ params, searchParams }: { params: Pr
                             {!pay && (
                               <Modal title={`Pagar ${periodLabel(period)} · ${e.user.name}`} trigger="Marcar como pago" triggerClass="btn-primary btn-sm">
                                 <ActionForm action={paySalaryAction} hidden={{ slug, employeeId: e.id, period }} className="space-y-4">
-                                  <Field label={`Valor pago (${cur})`} hint={e.salaryCents ? "Deixe como está para pagar o salário base" : "Este funcionário ainda não tem salário base"}>
-                                    <input name="amount" className="input" inputMode="decimal" required defaultValue={e.salaryCents ? String(e.salaryCents / 100) : ""} />
+                                  <Field label={`Valor pago (${cur})`} hint={e.salaryCents ? (days > 0 ? `Salário base menos ${days} falta(s) (−${money(discount, cur)}). Altere se necessário.` : "Deixe como está para pagar o salário base") : "Este funcionário ainda não tem salário base"}>
+                                    <input name="amount" className="input" inputMode="decimal" required defaultValue={e.salaryCents ? String((e.salaryCents - discount) / 100) : ""} />
                                   </Field>
                                   <div className="grid gap-4 sm:grid-cols-2">
                                     <Field label="Data do pagamento"><input name="paidAt" type="date" className="input" required defaultValue={today} max={today} /></Field>
@@ -106,7 +118,7 @@ export default async function PayrollPage({ params, searchParams }: { params: Pr
           </div>
         </Card>
       )}
-      <p className="mt-4 text-xs text-ink-soft">Cada funcionário vê no seu perfil apenas o próprio salário e os meses pagos.</p>
+      <p className="mt-4 text-xs text-ink-soft">Cada funcionário vê no seu perfil o próprio salário, as faltas e os meses pagos. As faltas registam-se no <Link href={`${ctx.base}/gestao/calendario?mes=${period}`} className="link">calendário mensal</Link>.</p>
     </>
   );
 }
