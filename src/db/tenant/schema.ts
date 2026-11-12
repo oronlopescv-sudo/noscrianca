@@ -286,9 +286,19 @@ export const settings = pgTable("settings", {
   paymentInfo: text("payment_info").notNull().default(""),
   reminderEnabled: boolean("reminder_enabled").notNull().default(false),
   reminderDays: text("reminder_days").notNull().default("1,7"),
+  publicDescription: text("public_description").notNull().default(""),
+  publicHours: text("public_hours").notNull().default(""),
   invoiceCounter: integer("invoice_counter").notNull().default(0),
   receiptCounter: integer("receipt_counter").notNull().default(0),
   updatedAt: updatedAt(),
+});
+
+/** Fotografias da página pública da instituição (visíveis a qualquer visitante). */
+export const publicPhotos = pgTable("public_photos", {
+  id: id(),
+  path: text("path").notNull(),
+  caption: text("caption").notNull().default(""),
+  createdAt: createdAt(),
 });
 
 /** Avisos de cobrança enviados (um por fatura, etapa e encarregado). */
