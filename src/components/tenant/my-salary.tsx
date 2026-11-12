@@ -48,6 +48,7 @@ export async function MySalary({ ctx, yearParam }: { ctx: TenantCtx; yearParam?:
                 {p ? <Badge tone="green">Pago</Badge> : due ? <Badge tone="red">Não pago</Badge> : <Badge>—</Badge>}
               </div>
               <p className="mt-1.5 text-xs text-ink-soft">{p ? `${money(p.amountCents, cur)} · pago a ${fmtDate(p.paidAt)}` : due ? "A aguardar pagamento" : ym > current ? "Ainda não chegou" : "Sem registo"}</p>
+              {p && <a href={`${ctx.base}/recibo-salario/${p.id}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm mt-2">Recibo PDF</a>}
             </li>
           );
         })}

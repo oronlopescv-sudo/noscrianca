@@ -28,6 +28,17 @@ describe("mailConfigured", () => {
 });
 
 describe("sendMail pelo Resend", () => {
+  it("envia anexos em base64", async () => {
+    process.env.RESEND_API_KEY = "re_x";
+    process.env.EMAIL_FROM = "cobranca@exemplo.cv";
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const ok = await sendMail({ to: "marta@creche.demo", subject: "Recibo", text: "Em anexo", attachments: [{ filename: "recibo.pdf", content: new Uint8Array([37, 80, 68, 70]) }] });
+    expect(ok).toBe(true);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).attachments).toEqual([{ filename: "recibo.pdf", content: "JVBERg==" }]);
+  });
+
   it("envia o pedido com remetente, destinatário e reply_to", async () => {
     process.env.RESEND_API_KEY = "re_x";
     process.env.EMAIL_FROM = "cobranca@exemplo.cv";
