@@ -134,15 +134,26 @@ export async function voidInvoiceAction(_p: S, fd: FormData): Promise<ActionResu
 
 // ======================= GESTÃO RÁPIDA (ficha da criança) =======================
 
-/** Emite a mensalidade de um mês só para uma criança (quando ainda não existe). */
+/** Emite a mensalidade de um mês só para uma criança. Quando não é possível, diz a causa concreta. */
 export async function issueChildInvoiceAction(_p: S, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     const ctx = await tenantAction(str(fd, "slug"), { permission: "finance.manage" });
     const childId = str(fd, "childId"), period = str(fd, "period");
     if (!isPeriod(period)) fail("Mês inválido.");
     await assertChildAccess(ctx, childId);
+    const kid = await ctx.db.query.children.findFirst({ where: eq(t.children.id, childId), with: { feePlan: true } });
+    if (!kid) fail("Criança não encontrada.");
+    const plan = kid.feePlan;
+    if (kid.status !== "ACTIVE") fail("A criança está inativa. Reative-a na ficha antes de emitir a mensalidade.");
+    if (!plan) fail("A criança não tem plano de mensalidade. Atribua um plano na ficha antes de emitir.");
+    if (!plan.active) fail("O plano de mensalidade desta criança está desativado. Escolha outro plano na ficha.");
+    if (kid.enrolledAt.slice(0, 7) > period) fail(`A criança só entrou em ${periodLabel(kid.enrolledAt.slice(0, 7))}. Não há mensalidade de um mês anterior à entrada.`);
+    const existing = await ctx.db.query.invoices.findFirst({
+      where: and(eq(t.invoices.childId, childId), eq(t.invoices.period, period), eq(t.invoices.kind, "MONTHLY"), isNull(t.invoices.voidedAt)),
+    });
+    if (existing) fail(`Já existe a mensalidade de ${periodLabel(period)} desta criança (fatura ${existing.number}).`);
     const r = await generateMonthlyInvoices(ctx.db, period, todayIn(ctx.settings.timezone), { recreateVoided: true, childId });
-    if (!r.created) fail("Não foi possível emitir: a criança não está ativa, não tem mensalidade atribuída ou já tem fatura neste mês.");
+    if (!r.created) fail("Não foi possível emitir a mensalidade. Tente novamente.");
     await audit(ctx, "Mensalidade emitida", { entity: "invoice", details: { mes: period, childId } });
     return { ok: true, message: `Mensalidade de ${periodLabel(period)} emitida.` };
   });

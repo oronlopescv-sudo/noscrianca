@@ -27,13 +27,15 @@ function shift(ym: string, delta: number): string {
  * (estado da mensalidade) e os dias do mês escolhido (presença e pagamentos).
  * Quem chama garante o acesso à criança; aqui só se escolhe o que mostrar.
  */
-export async function ChildCalendar({ ctx, childId, month, basePath, showFinance, showAttendance, manage, canPay = false }: {
+export async function ChildCalendar({ ctx, childId, month, basePath, showFinance, showAttendance, manage, canPay = false, issueBlocked = null }: {
   ctx: TenantCtx; childId: string; month: string; basePath: string;
   showFinance: boolean; showAttendance: boolean;
   /** Gestão: os meses ligam à fatura, onde se regista o pagamento. */
   manage: boolean;
   /** Pode marcar pago / não pago e enviar cobranças (permissão financeira de escrita). */
   canPay?: boolean;
+  /** Motivo que impede emitir a mensalidade (criança inativa, sem plano). Mostrado no lugar do botão. */
+  issueBlocked?: string | null;
 }) {
   if (!showFinance && !showAttendance) return null;
   const today = todayIn(ctx.settings.timezone);
@@ -145,7 +147,9 @@ export async function ChildCalendar({ ctx, childId, month, basePath, showFinance
           return (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-sm sm:px-5">
               <p className="text-ink-soft">Sem mensalidade emitida para {MONTHS[m - 1].toLowerCase()} de {y}.</p>
-              {manage && canPay && <ActionButton action={issueChildInvoiceAction} hidden={{ slug, childId, period: month }} className="btn-primary btn-sm">Emitir mensalidade deste mês</ActionButton>}
+              {manage && canPay && (issueBlocked
+                ? <p className="text-xs text-ink-soft">{issueBlocked}</p>
+                : <ActionButton action={issueChildInvoiceAction} hidden={{ slug, childId, period: month }} className="btn-primary btn-sm">Emitir mensalidade deste mês</ActionButton>)}
             </div>
           );
         }
