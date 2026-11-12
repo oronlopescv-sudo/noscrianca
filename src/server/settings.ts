@@ -13,7 +13,8 @@ export async function saveSettingsAction(_p: S, fd: FormData): Promise<ActionRes
   return run(async () => {
     const ctx = await tenantAction(str(fd, "slug"), { permission: "settings.manage" });
     const d = z.object({
-      name: z.string().trim().min(2, "Indique o nome da instituição.").max(120),
+      // Alimenta assuntos/corpos de email: sem quebras de linha.
+      name: z.string().trim().min(2, "Indique o nome da instituição.").max(120).regex(/^[^\r\n\0]+$/, "O nome não pode conter quebras de linha."),
       email: z.union([z.string().trim().toLowerCase().email("Email inválido."), z.literal("")]),
       phone: z.string().trim().max(40), address: z.string().trim().max(200), taxId: z.string().trim().max(40),
       accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida."),

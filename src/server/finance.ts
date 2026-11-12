@@ -6,7 +6,7 @@ import type { PaymentMethod } from "@/db/tenant/schema";
 import { isIsoDate, isPeriod, money, parseMoney, periodLabel, todayIn } from "@/lib/format";
 import { bool, fail, file, run, str, type ActionResult } from "@/lib/result";
 import { createExtraInvoice, generateMonthlyInvoices, METHOD_LABELS, recordPayment, reversePayment, voidInvoice } from "@/lib/services/finance";
-import { saveUpload } from "@/lib/storage";
+import { deleteTenantFile, saveUpload } from "@/lib/storage";
 import { audit, notify, tenantAction, type TenantCtx } from "@/lib/tenant";
 
 type S = ActionResult | null;
@@ -100,9 +100,16 @@ export async function recordPaymentAction(_p: S, fd: FormData): Promise<ActionRe
     if (!isIsoDate(paidAt) || paidAt > todayIn(ctx.settings.timezone)) fail("Data de pagamento inválida.");
     const proof = file(fd, "proof");
     const saved = proof ? await saveUpload(ctx.institution.id, `payments/${invoiceId}`, proof, { kind: "document", maxMb: 8 }) : null;
-    const r = await recordPayment(ctx.db, {
-      invoiceId, amountCents: amountCents!, method, reference: str(fd, "reference").slice(0, 120), paidAt, proofPath: saved?.path, userId: ctx.user.id, userName: ctx.user.name,
-    });
+    let r;
+    try {
+      r = await recordPayment(ctx.db, {
+        invoiceId, amountCents: amountCents!, method, reference: str(fd, "reference").slice(0, 120), paidAt, proofPath: saved?.path, userId: ctx.user.id, userName: ctx.user.name,
+      });
+    } catch (e) {
+      // O registo falhou (fatura paga/anulada/valor a mais): não deixar o ficheiro órfão.
+      if (saved) await deleteTenantFile(ctx.institution.id, saved.path);
+      throw e;
+    }
     await notify(ctx.db, await guardianUsersOfChild(ctx, r.invoice.childId), {
       title: "Pagamento registado", body: `${money(amountCents!, ctx.settings.currency)} · recibo ${r.receipt.number}`, href: `${ctx.base}/pais/financeiro`,
     });

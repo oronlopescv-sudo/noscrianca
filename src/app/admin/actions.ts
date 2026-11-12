@@ -6,8 +6,8 @@ import { and, count, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { central, c } from "@/db/central";
 import { getTenantDb, t } from "@/db/tenant";
-import { clearFailures, createSession, destroySession, destroyUserSessions, lockedFor, passwordProblem, recordFailure } from "@/lib/auth";
-import { hashPassword, verifyPassword } from "@/lib/crypto";
+import { clearFailures, createSession, destroySession, destroyUserSessions, lockedFor, passwordProblem, readSession, recordFailure } from "@/lib/auth";
+import { burnPasswordCheck, hashPassword, verifyPassword } from "@/lib/crypto";
 import { parseMoney } from "@/lib/format";
 import { sendMail } from "@/lib/mail";
 import { DIRECTOR_KEY } from "@/lib/permissions";
@@ -21,6 +21,9 @@ import { createInstitution, dropTenantDatabase, runProvisioning, slugProblem } f
 type S = ActionResult | null;
 const email = z.string().trim().toLowerCase().email("Email inválido.").max(160);
 const CURRENCIES = ["CVE", "EUR", "USD"];
+// Nomes que alimentam assuntos/corpos de email: sem quebras de linha.
+const safeName = (message: string, max = 120) =>
+  z.string().trim().min(2, message).max(max).regex(/^[^\r\n\0]+$/, "O nome não pode conter quebras de linha.");
 
 // ---------- sessão ----------
 export async function adminLoginAction(_p: S, fd: FormData): Promise<ActionResult> {
@@ -30,9 +33,11 @@ export async function adminLoginAction(_p: S, fd: FormData): Promise<ActionResul
     const mins = await lockedFor(key);
     if (mins) fail(`Demasiadas tentativas. Tente novamente dentro de ${mins} min.`);
     const user = await central().query.platformUsers.findFirst({ where: eq(c.platformUsers.email, mail) });
-    const ok = await verifyPassword(str(fd, "password"), user?.passwordHash);
+    const password = str(fd, "password");
+    const ok = await verifyPassword(password, user?.passwordHash);
     if (!user || !ok || !user.active) {
       await recordFailure(key);
+      if (!user) await burnPasswordCheck(password);
       fail("Email ou palavra-passe incorretos.");
     }
     await clearFailures(key);
@@ -58,14 +63,14 @@ export async function checkSlugAction(slug: string): Promise<{ ok: boolean; mess
 }
 
 const institutionSchema = z.object({
-  name: z.string().trim().min(2, "Indique o nome da instituição.").max(120),
+  name: safeName("Indique o nome da instituição."),
   slug: z.string().trim().toLowerCase(),
   email: z.union([email, z.literal("")]),
   phone: z.string().trim().max(40),
   address: z.string().trim().max(200),
   city: z.string().trim().max(80),
   currency: z.string().refine((v) => CURRENCIES.includes(v), "Moeda inválida."),
-  directorName: z.string().trim().min(2, "Indique o nome do diretor.").max(120),
+  directorName: safeName("Indique o nome do diretor."),
   directorEmail: email,
   directorPhone: z.string().trim().max(40),
   planId: z.string().min(1, "Escolha um plano."),
@@ -121,7 +126,7 @@ export async function updateInstitutionAction(_p: S, fd: FormData): Promise<Acti
     const admin = await platformAction();
     const id = str(fd, "institutionId");
     const d = z.object({
-      name: z.string().trim().min(2, "Indique o nome.").max(120),
+      name: safeName("Indique o nome."),
       email: z.union([email, z.literal("")]),
       phone: z.string().trim().max(40), address: z.string().trim().max(200), city: z.string().trim().max(80),
       planId: z.string().min(1, "Escolha um plano."), billingCycle: z.enum(["MONTHLY", "YEARLY"]),
@@ -206,7 +211,7 @@ export async function addDirectorAction(_p: S, fd: FormData): Promise<ActionResu
   return run(async () => {
     const admin = await platformAction();
     const inst = await liveInstitution(str(fd, "institutionId"));
-    const d = z.object({ name: z.string().trim().min(2, "Indique o nome.").max(120), email, phone: z.string().trim().max(40) })
+    const d = z.object({ name: safeName("Indique o nome."), email, phone: z.string().trim().max(40) })
       .parse({ name: str(fd, "name"), email: str(fd, "email"), phone: str(fd, "phone") });
     const db = await getTenantDb(inst.id);
     const role = await db.query.roles.findFirst({ where: eq(t.roles.key, DIRECTOR_KEY) });
@@ -478,7 +483,7 @@ export async function savePlatformSettingsAction(_p: S, fd: FormData): Promise<A
   return run(async () => {
     const admin = await platformAction();
     const d = z.object({
-      saasName: z.string().trim().min(2, "Indique o nome da plataforma.").max(60),
+      saasName: safeName("Indique o nome da plataforma.", 60),
       supportEmail: z.union([email, z.literal("")]),
       supportPhone: z.string().trim().max(40),
       billingCurrency: z.string().refine((v) => CURRENCIES.includes(v), "Moeda inválida."),
@@ -503,6 +508,8 @@ export async function changeAdminPasswordAction(_p: S, fd: FormData): Promise<Ac
     if (problem) fail(problem);
     if (next !== str(fd, "confirm")) fail("As palavras-passe não coincidem.");
     await central().update(c.platformUsers).set({ passwordHash: await hashPassword(next) }).where(eq(c.platformUsers.id, admin.id));
+    // Fecha as outras sessões deste administrador (a atual mantém-se).
+    await destroyUserSessions("PLATFORM", admin.id, undefined, (await readSession("PLATFORM"))?.tokenHash);
     await platformAudit(admin, "Palavra-passe alterada");
     return { ok: true, message: "Palavra-passe alterada." };
   });
@@ -511,7 +518,7 @@ export async function changeAdminPasswordAction(_p: S, fd: FormData): Promise<Ac
 export async function addAdminAction(_p: S, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     const admin = await platformAction();
-    const d = z.object({ name: z.string().trim().min(2, "Indique o nome.").max(120), email }).parse({ name: str(fd, "name"), email: str(fd, "email") });
+    const d = z.object({ name: safeName("Indique o nome."), email }).parse({ name: str(fd, "name"), email: str(fd, "email") });
     const password = str(fd, "password");
     const problem = passwordProblem(password);
     if (problem) fail(problem);

@@ -1,7 +1,7 @@
 // BD CENTRAL — instituições, utilizadores da plataforma, planos, faturas do
 // SaaS, registo das BDs dos tenants, jobs de provisionamento e sessões.
 import { relations } from "drizzle-orm";
-import { bigint, boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createId } from "@paralleldrive/cuid2";
 
 const id = () => text("id").primaryKey().$defaultFn(() => createId());
@@ -138,7 +138,7 @@ export const platformInvoices = pgTable("platform_invoices", {
   voidedAt: ts("voided_at"),
   voidReason: text("void_reason"),
   notes: text("notes").notNull().default(""),
-}, (t) => [index("pinv_inst_idx").on(t.institutionId), index("pinv_status_idx").on(t.status)]);
+}, (t) => [index("pinv_inst_idx").on(t.institutionId), index("pinv_status_idx").on(t.status), uniqueIndex("pinv_inst_period_uq").on(t.institutionId, t.periodStart)]);
 
 export const backupRecords = pgTable("backup_records", {
   id: id(),

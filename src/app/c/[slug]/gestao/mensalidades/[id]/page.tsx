@@ -4,7 +4,7 @@ import { asc, eq } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { ActionForm, ConfirmAction, Submit } from "@/components/ui/client";
 import { Badge, Card, DL, EmptyState, Field, PageHeader } from "@/components/ui/kit";
-import { fmtDate, money, periodLabel } from "@/lib/format";
+import { fmtDate, money, periodLabel, todayIn } from "@/lib/format";
 import { INVOICE_STATUS } from "@/lib/labels";
 import { PAYMENT_METHODS } from "@/lib/payment-methods";
 import { recordPaymentAction, reversePaymentAction, voidInvoiceAction } from "@/server/finance";
@@ -77,7 +77,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ slug: 
                     {Object.entries(PAYMENT_METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </Field>
-                <Field label="Data do pagamento"><input name="paidAt" type="date" className="input" required defaultValue={new Date().toISOString().slice(0, 10)} /></Field>
+                <Field label="Data do pagamento"><input name="paidAt" type="date" className="input" required defaultValue={todayIn(ctx.settings.timezone)} /></Field>
                 <Field label="Referência" hint="Nº do cheque, da transferência…"><input name="reference" className="input" maxLength={80} /></Field>
                 <Field label="Comprovativo (opcional)"><input name="proof" type="file" accept="application/pdf,image/*" className="input" /></Field>
                 <div className="flex justify-end"><Submit>Registar pagamento</Submit></div>

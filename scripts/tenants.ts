@@ -3,10 +3,12 @@ import { eq } from "drizzle-orm";
 import { central, c, closeCentral } from "@/db/central";
 import { closeAllTenantPools } from "@/db/tenant";
 import { backupInstitution, migrateAllTenants, restoreInstitution } from "@/lib/services/ops";
+import { hardenTenantIsolation } from "@/lib/services/provisioning";
 
 /**
  * CLI de manutenção das bases de dados das instituições.
  *   npm run tenants:migrate                  aplica migrações em todas as instituições ativas
+ *                                            e endurece o isolamento das roles (sem CONNECT)
  *   npm run tenants:backup -- <slug>         cópia de segurança manual de uma instituição
  *   npm run tenants:restore -- <slug> <id>   repõe uma cópia de segurança (id em backup_records)
  */
@@ -16,6 +18,8 @@ async function main() {
     const report = await migrateAllTenants();
     for (const r of report) console.log(`${r.ok ? "✓" : "✗"} ${r.slug}${r.error ? ` — ${r.error}` : ""}`);
     if (report.some((r) => !r.ok)) process.exitCode = 1;
+    const hardened = await hardenTenantIsolation();
+    console.log(`Isolamento verificado em ${hardened} base(s) de dados.`);
     return;
   }
   if (cmd === "backup" || cmd === "restore") {

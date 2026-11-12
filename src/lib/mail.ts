@@ -10,7 +10,9 @@ type Mail = { to: string; subject: string; text: string };
 export async function sendMail(mail: Mail): Promise<boolean> {
   const host = process.env.SMTP_HOST;
   if (!host) {
-    console.log(`[mail:não configurado] Para: ${mail.to} | ${mail.subject}\n${mail.text}`);
+    // Nunca registamos o conteúdo: os textos contêm links de convite/reset com
+    // token de uso único. Os links ficam disponíveis no painel correspondente.
+    console.log(`[mail:não configurado] Para: ${mail.to} | Assunto: ${mail.subject} | conteúdo omitido`);
     return false;
   }
   try {

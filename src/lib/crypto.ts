@@ -20,6 +20,14 @@ export async function verifyPassword(password: string, stored: string | null | u
   return key.length === expected.length && timingSafeEqual(key, expected);
 }
 
+let dummyHash: string | null = null;
+/** Queima uma verificação com custo igual à real, para contas inexistentes
+ * (impede a enumeração de emails pelo tempo de resposta do login). */
+export async function burnPasswordCheck(password: string): Promise<void> {
+  dummyHash ??= await hashPassword("noscrianca:conta-inexistente");
+  await verifyPassword(password, dummyHash);
+}
+
 export function randomToken(bytes = 32): string {
   return randomBytes(bytes).toString("base64url");
 }
