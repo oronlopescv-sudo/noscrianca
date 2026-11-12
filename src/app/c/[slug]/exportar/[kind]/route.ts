@@ -17,7 +17,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const r = await loadTenant(slug);
   if (!r.ok) return new Response("Não autorizado", { status: 401 });
   const ctx = r.ctx;
-  if (ctx.isGuardian || !ctx.can(PERM[kind as Kind])) return new Response("Sem permissão", { status: 403 });
+  if (ctx.isGuardian || ctx.panel !== "MANAGEMENT" || !ctx.can(PERM[kind as Kind])) return new Response("Sem permissão", { status: 403 });
 
   const url = new URL(req.url);
   const from = url.searchParams.get("de") ?? "";

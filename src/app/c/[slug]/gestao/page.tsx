@@ -11,7 +11,7 @@ import { Baby, CalendarCheck, Users, Wallet } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function ManagementDashboard({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "children.view" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT" });
   const today = todayIn(ctx.settings.timezone);
   const period = today.slice(0, 7);
   const scope = childScope(ctx);
