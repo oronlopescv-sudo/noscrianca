@@ -69,7 +69,8 @@ export default async function ChildPage({ params, searchParams }: { params: Prom
 
       <div className="mb-5">
         <ChildCalendar ctx={ctx} childId={id} month={calendarMonth((await searchParams).mes, today)} basePath={`${ctx.base}/gestao/criancas/${id}`}
-          showFinance={ctx.can("finance.view")} showAttendance={ctx.can("attendance.view")} manage canPay={ctx.can("finance.manage") && !ctx.readOnly} />
+          showFinance={ctx.can("finance.view")} showAttendance={ctx.can("attendance.view")} manage canPay={ctx.can("finance.manage") && !ctx.readOnly}
+          issueBlocked={child.status !== "ACTIVE" ? "Reative a criança para emitir mensalidades." : !child.feePlan ? "Atribua um plano de mensalidade na ficha para emitir mensalidades." : null} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
