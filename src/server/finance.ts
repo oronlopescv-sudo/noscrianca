@@ -1,6 +1,7 @@
 "use server";
 
-import { and, count, eq, isNull, ne } from "drizzle-orm";
+import { after } from "next/server";
+import { and, count, eq, inArray, isNull, lt, ne } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import type { PaymentMethod } from "@/db/tenant/schema";
 import { isIsoDate, isPeriod, money, parseMoney, periodLabel, todayIn } from "@/lib/format";
@@ -227,5 +228,56 @@ export async function sendPaymentReminderAction(_p: S, fd: FormData): Promise<Ac
     if (!mailConfigured()) return { ok: true, message: "Aviso enviado na aplicação. O email não está configurado no servidor, por isso não foi enviado email." };
     if (mailed < recipients.length) return { ok: true, message: `Aviso enviado: ${mailed} de ${recipients.length} email(s) entregues ao serviço de envio.` };
     return { ok: true, message: `Cobrança enviada por email a ${mailed} encarregado(s).` };
+  });
+}
+
+/** Cobrança em lote: avisa os encarregados de TODAS as faturas em atraso. Os emails seguem depois da resposta. */
+export async function sendBulkRemindersAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "finance.manage" });
+    const today = todayIn(ctx.settings.timezone);
+    const overdue = await ctx.db.query.invoices.findMany({
+      where: and(inArray(t.invoices.status, ["OPEN", "PARTIAL"]), isNull(t.invoices.voidedAt), lt(t.invoices.dueDate, today)), with: { child: true },
+    });
+    if (!overdue.length) fail("Não há faturas em atraso.");
+    const s = ctx.settings;
+    const mails: { to: string; subject: string; text: string }[] = [];
+    let families = 0;
+    for (const inv of overdue) {
+      const rows = await ctx.db.select({ userId: t.users.id, name: t.users.name, email: t.users.email, status: t.users.status, deletedAt: t.users.deletedAt })
+        .from(t.childGuardians)
+        .innerJoin(t.guardians, eq(t.guardians.id, t.childGuardians.guardianId))
+        .innerJoin(t.users, eq(t.users.id, t.guardians.userId))
+        .where(eq(t.childGuardians.childId, inv.childId));
+      const recipients = rows.filter((r) => r.status !== "SUSPENDED" && !r.deletedAt);
+      if (!recipients.length) continue;
+      families++;
+      const due = money(inv.totalCents - inv.paidCents, s.currency);
+      await notify(ctx.db, recipients.filter((r) => r.status === "ACTIVE").map((r) => r.userId), {
+        title: `Fatura ${inv.number} em atraso`, body: `Valor em falta: ${due}`, href: `${ctx.base}/pais/financeiro`,
+      });
+      for (const g of recipients.filter((r) => r.email)) {
+        mails.push({
+          to: g.email, subject: `Pagamento em atraso: ${inv.child.firstName} (fatura ${inv.number})`,
+          text: [
+            `Olá ${g.name},`, "", `A fatura ${inv.number} de ${inv.child.firstName} está em atraso.`,
+            `Valor em falta: ${due}. Vencimento: ${inv.dueDate.split("-").reverse().join("/")}.`, "",
+            s.paymentInfo ? `Como pagar:\n${s.paymentInfo}` : "Contacte a creche para saber como pagar.", "",
+            "Se já pagou, pode ignorar esta mensagem. Obrigado.", s.name,
+          ].join("\n"),
+        });
+      }
+    }
+    const configured = mailConfigured();
+    if (configured && mails.length) {
+      const replyTo = s.email || undefined;
+      after(async () => {
+        let sent = 0;
+        for (const m of mails) if (await sendMail({ ...m, replyTo })) sent++;
+        if (sent < mails.length) console.error(`[cobrança em lote] ${mails.length - sent} de ${mails.length} emails falharam`);
+      });
+    }
+    await audit(ctx, "Cobrança em lote enviada", { entity: "invoice", details: { faturas: overdue.length, familias: families, emails: configured ? mails.length : 0 } });
+    return { ok: true, message: `Cobrança enviada para ${families} de ${overdue.length} fatura(s) em atraso.${configured ? ` A enviar ${mails.length} email(s).` : " O email não está configurado no servidor: seguiu só o aviso na aplicação."}` };
   });
 }

@@ -98,7 +98,7 @@ export default async function ChildPage({ params, searchParams }: { params: Prom
                         <p className="text-xs text-ink-soft">{g.relationship}{g.canPickup ? " · pode recolher" : ""}{g.guardian.user.status === "INVITED" ? " · convite pendente" : ""}{g.guardian.user.status === "SUSPENDED" ? " · conta suspensa" : ""}</p>
                         <dl className="mt-1.5 grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-2">
                           <div><dt className="inline text-ink-soft">Email: </dt><dd className="inline"><a href={`mailto:${g.guardian.user.email}`} className="link">{g.guardian.user.email}</a></dd></div>
-                          <div><dt className="inline text-ink-soft">Telefone: </dt><dd className="inline">{g.guardian.user.phone ? <a href={`tel:${g.guardian.user.phone}`} className="link">{g.guardian.user.phone}</a> : "—"}</dd></div>
+                          <div><dt className="inline text-ink-soft">Telefone: </dt><dd className="inline">{g.guardian.user.phone ? <><a href={`tel:${g.guardian.user.phone}`} className="link">{g.guardian.user.phone}</a>{g.guardian.user.phone.replace(/[^0-9]/g, "").length >= 7 && <> · <a href={`https://wa.me/${g.guardian.user.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener" className="link">WhatsApp</a></>}</> : "—"}</dd></div>
                           <div><dt className="inline text-ink-soft">Morada: </dt><dd className="inline">{g.guardian.address || "—"}</dd></div>
                           <div><dt className="inline text-ink-soft">Profissão: </dt><dd className="inline">{g.guardian.occupation || "—"}</dd></div>
                           <div><dt className="inline text-ink-soft">Documento: </dt><dd className="inline">{g.guardian.idDocument || "—"}</dd></div>

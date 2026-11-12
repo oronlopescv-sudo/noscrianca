@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { ActionForm, ConfirmAction, Modal, Submit } from "@/components/ui/client";
 import { Badge, Card, EmptyState, Field, PageHeader } from "@/components/ui/kit";
 import { money, periodLabel, todayIn, centsToInput } from "@/lib/format";
 import { INVOICE_STATUS, CYCLE_LABEL } from "@/lib/labels";
-import { deleteFeePlanAction, generateInvoicesAction, createExtraInvoiceAction, saveFeePlanAction } from "@/server/finance";
-import { requireTenant } from "@/lib/tenant";
+import { deleteFeePlanAction, generateInvoicesAction, createExtraInvoiceAction, saveFeePlanAction, sendBulkRemindersAction } from "@/server/finance";
+import { reviewPaymentProofAction } from "@/server/extras";
+import { fileUrl, requireTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,12 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
     .innerJoin(t.children, eq(t.children.id, t.invoices.childId))
     .orderBy(desc(t.invoiceReminders.sentAt)).limit(30);
 
+  const [proofs, overdue] = await Promise.all([
+    ctx.db.query.paymentProofs.findMany({ where: eq(t.paymentProofs.status, "PENDING"), orderBy: [asc(t.paymentProofs.createdAt)], with: { invoice: { with: { child: true } } } }),
+    ctx.db.query.invoices.findMany({ where: and(inArray(t.invoices.status, ["OPEN", "PARTIAL"]), isNull(t.invoices.voidedAt), lt(t.invoices.dueDate, today)), columns: { id: true, totalCents: true, paidCents: true } }),
+  ]);
+  const overdueTotal = overdue.reduce((a, i) => a + (i.totalCents - i.paidCents), 0);
+
   return (
     <>
       <PageHeader
@@ -41,6 +48,10 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
         subtitle={`Mês de referência: ${periodLabel(period)}`}
         actions={canManage && (
           <>
+            {overdue.length > 0 && (
+              <ConfirmAction action={sendBulkRemindersAction} hidden={{ slug }} label={`Cobrar ${overdue.length} em atraso`} triggerClass="btn-secondary"
+                title="Cobrar todas as faturas em atraso" text={`Os encarregados das ${overdue.length} fatura(s) em atraso (${money(overdueTotal, cur)} no total) recebem um email e um aviso na aplicação.`} confirmLabel="Enviar cobranças" />
+            )}
             <Modal title="Gerar faturas mensais" trigger="Gerar faturas do mês" triggerClass="btn-secondary">
               <ActionForm action={generateInvoicesAction} hidden={{ slug }} className="space-y-4">
                 <Field label="Mês" hint="Gera uma fatura por criança ativa com mensalidade. Não duplica faturas já existentes."><input name="period" type="month" className="input" required defaultValue={period} /></Field>
@@ -62,6 +73,47 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
           </>
         )}
       />
+
+      {proofs.length > 0 && (
+        <Card title={`Comprovativos por confirmar (${proofs.length})`} className="mb-5 border-amber-300" pad={false}>
+          <ul className="divide-y divide-line">
+            {proofs.map((p) => {
+              const remaining = p.invoice.totalCents - p.invoice.paidCents;
+              return (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm sm:px-5">
+                  <div className="min-w-0">
+                    <p className="font-medium">{p.invoice.child.firstName} {p.invoice.child.lastName} · <Link href={`${ctx.base}/gestao/mensalidades/${p.invoice.id}`} className="link">{p.invoice.number}</Link></p>
+                    <p className="text-xs text-ink-soft">Enviado por {p.userName} · em falta {money(Math.max(remaining, 0), cur)}{p.note ? ` · "${p.note}"` : ""}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <a href={fileUrl(ctx, p.path) ?? "#"} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">Ver comprovativo</a>
+                    {canManage && remaining > 0 && (
+                      <Modal title={`Confirmar pagamento · ${p.invoice.number}`} trigger="Confirmar pagamento" triggerClass="btn-primary btn-sm">
+                        <ActionForm action={reviewPaymentProofAction} hidden={{ slug, proofId: p.id, decision: "ACCEPT" }} className="space-y-4">
+                          <p className="text-sm text-ink-soft">Confirme o valor que aparece no comprovativo. O pagamento é registado e o recibo emitido.</p>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <Field label={`Valor recebido (${cur})`}><input name="amount" className="input" inputMode="decimal" required defaultValue={centsToInput(remaining)} /></Field>
+                            <Field label="Data do pagamento"><input name="paidAt" type="date" className="input" required defaultValue={today} max={today} /></Field>
+                          </div>
+                          <Field label="Forma de pagamento">
+                            <select name="method" className="input" defaultValue="TRANSFER"><option value="TRANSFER">Transferência</option><option value="DEPOSIT">Depósito</option><option value="CASH">Dinheiro</option><option value="CHEQUE">Cheque</option><option value="OTHER">Outro</option></select>
+                          </Field>
+                          <div className="flex justify-end"><Submit>Confirmar e emitir recibo</Submit></div>
+                        </ActionForm>
+                      </Modal>
+                    )}
+                    {canManage && (
+                      <ConfirmAction action={reviewPaymentProofAction} hidden={{ slug, proofId: p.id, decision: "REJECT" }} label="Recusar" danger title="Recusar comprovativo" text="O encarregado é avisado e pode enviar outro comprovativo." confirmLabel="Recusar">
+                        <Field label="Motivo"><input name="reason" className="input" required minLength={3} maxLength={300} placeholder="Ex.: imagem ilegível, valor não coincide" /></Field>
+                      </ConfirmAction>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card title="Faturas" className="lg:col-span-2" pad={false}

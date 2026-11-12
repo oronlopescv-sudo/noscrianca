@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { desc, inArray, isNull } from "drizzle-orm";
+import { desc, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "@/db/tenant";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui/kit";
+import { ActionForm, Modal, Submit } from "@/components/ui/client";
+import { Badge, Card, EmptyState, Field, PageHeader } from "@/components/ui/kit";
 import { fmtDate, money, periodLabel, todayIn } from "@/lib/format";
 import { INVOICE_STATUS } from "@/lib/labels";
 import { PAYMENT_METHODS } from "@/lib/payment-methods";
-import { guardianChildIds, requireTenant } from "@/lib/tenant";
+import { fileUrl, guardianChildIds, requireTenant } from "@/lib/tenant";
+import { submitPaymentProofAction } from "@/server/extras";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,11 @@ export default async function GuardianFinance({ params, searchParams }: { params
   const open = invoices.filter((i) => i.status === "OPEN" || i.status === "PARTIAL");
   const owed = open.reduce((s, i) => s + (i.totalCents - i.paidCents), 0);
   const bank = ctx.settings.paymentInfo;
+  // Comprovativos enviados por este encarregado (o mais recente de cada fatura).
+  const myProofs = await ctx.db.query.paymentProofs.findMany({ where: eq(t.paymentProofs.userId, ctx.user.id), orderBy: [desc(t.paymentProofs.createdAt)], limit: 200 });
+  const proofOf = new Map<string, (typeof myProofs)[number]>();
+  for (const p of myProofs) if (!proofOf.has(p.invoiceId)) proofOf.set(p.invoiceId, p);
+  const canSend = !ctx.readOnly;
   // Mensalidade (não anulada) de cada criança em cada mês do ano escolhido.
   const monthly = new Map(invoices.filter((i) => i.kind === "MONTHLY" && i.status !== "VOID").map((i) => [`${i.childId}|${i.period}`, i]));
   const base = `${ctx.base}/pais/financeiro`;
@@ -95,7 +102,27 @@ export default async function GuardianFinance({ params, searchParams }: { params
                       Recibo · {money(p.amountCents, cur)} ({PAYMENT_METHODS[p.method] ?? p.method})
                     </a>
                   ))}
+                  {canSend && (i.status === "OPEN" || i.status === "PARTIAL") && proofOf.get(i.id)?.status !== "PENDING" && (
+                    <Modal title={`Enviar comprovativo · fatura ${i.number}`} trigger="Já paguei: enviar comprovativo" triggerClass="btn-primary btn-sm">
+                      <ActionForm action={submitPaymentProofAction} hidden={{ slug: ctx.institution.slug, invoiceId: i.id }} className="space-y-4">
+                        <p className="text-sm text-ink-soft">Envie a foto ou o PDF do talão ou da transferência. A creche confirma o pagamento e o recibo fica disponível aqui.</p>
+                        <Field label="Comprovativo (foto ou PDF, até 8 MB)"><input name="proof" type="file" accept="image/*,application/pdf" required className="input" /></Field>
+                        <Field label="Nota (opcional)"><input name="note" className="input" maxLength={300} placeholder="Ex.: transferência feita a 5 de novembro" /></Field>
+                        <div className="flex justify-end"><Submit>Enviar comprovativo</Submit></div>
+                      </ActionForm>
+                    </Modal>
+                  )}
                 </div>
+                {(() => {
+                  const pr = proofOf.get(i.id);
+                  if (!pr || (pr.status === "ACCEPTED")) return null;
+                  return (
+                    <p className={`border-t border-line px-4 py-2.5 text-xs ${pr.status === "REJECTED" ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-900"}`}>
+                      {pr.status === "PENDING" ? "Comprovativo enviado. A aguardar confirmação da creche." : `Comprovativo recusado: ${pr.reviewNote || "contacte a creche"}. Pode enviar outro.`}{" "}
+                      <a href={fileUrl(ctx, pr.path) ?? "#"} target="_blank" rel="noopener" className="underline">Ver ficheiro enviado</a>
+                    </p>
+                  );
+                })()}
               </Card>
             ))}
           </div>

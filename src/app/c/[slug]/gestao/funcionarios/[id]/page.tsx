@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
+import { LeavesAdmin } from "@/components/tenant/leaves-admin";
 import { ActionForm, ConfirmAction, Modal, Submit } from "@/components/ui/client";
 import { Avatar, Badge, Card, Check, DL, Field, PageHeader } from "@/components/ui/kit";
 import { t } from "@/db/tenant";
@@ -54,6 +55,7 @@ export default async function EmployeeProfile({ params, searchParams }: { params
         </Card>
 
         <div className="space-y-5 lg:col-span-2">
+          {ctx.can("employees.manage") && <LeavesAdmin ctx={ctx} employeeId={emp.id} />}
           {!canPayroll ? (
             <Card title="Salários"><p className="text-sm text-ink-soft">Não tem permissão para ver os salários da equipa.</p></Card>
           ) : (

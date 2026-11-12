@@ -1,5 +1,6 @@
 import { and, desc, isNull, ne, or, inArray } from "drizzle-orm";
 import { t } from "@/db/tenant";
+import { UpcomingEvents } from "@/components/tenant/agenda";
 import { AnnouncementList } from "@/components/tenant/announcements";
 import { PageHeader } from "@/components/ui/kit";
 import { requireTenant } from "@/lib/tenant";
@@ -14,6 +15,7 @@ export default async function ClassroomAnnouncements({ params }: { params: Promi
   return (
     <>
       <PageHeader title="Avisos" subtitle="Comunicados da instituição e das suas turmas" />
+      <div className="mb-5"><UpcomingEvents ctx={ctx} viewer="STAFF" classroomIds={turmas} /></div>
       <AnnouncementList items={rows.map((r) => ({ id: r.id, title: r.title, body: r.body, classroomName: r.classroom?.name ?? null, createdByName: r.createdByName, createdAt: r.createdAt }))} timezone={ctx.settings.timezone} />
     </>
   );
