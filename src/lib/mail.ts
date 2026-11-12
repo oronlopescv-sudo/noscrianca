@@ -39,7 +39,8 @@ export async function sendMail(mail: Mail): Promise<boolean> {
   }
   const host = process.env.SMTP_HOST;
   if (!host) {
-    console.log(`[mail:não configurado] Para: ${mail.to} | ${mail.subject}\n${mail.text}`);
+    // Em produção o corpo não vai para o log: contém links de convite e de recuperação.
+    console.log(`[mail:não configurado] Para: ${mail.to} | ${mail.subject}${process.env.NODE_ENV === "production" ? "" : `\n${mail.text}`}`);
     return false;
   }
   try {

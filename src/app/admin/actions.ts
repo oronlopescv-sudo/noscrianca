@@ -213,9 +213,17 @@ export async function addDirectorAction(_p: S, fd: FormData): Promise<ActionResu
     if (!role) fail("Cargo de diretor em falta nesta instituição.");
     const [{ n }] = await db.select({ n: count() }).from(t.users).where(and(eq(t.users.roleId, role!.id), ne(t.users.status, "SUSPENDED")));
     if (n >= inst.maxDirectors) fail(`Esta instituição só pode ter ${inst.maxDirectors} diretor(es). Aumente o limite ou remova um diretor.`);
-    if (await db.query.users.findFirst({ where: eq(t.users.email, d.email) })) fail("Já existe um utilizador com este email nesta instituição.");
-    const [user] = await db.insert(t.users).values({ ...d, kind: "STAFF", status: "INVITED", roleId: role!.id }).returning();
-    await db.insert(t.employees).values({ userId: user.id, jobTitle: "Diretor(a)" });
+    const existing = await db.query.users.findFirst({ where: eq(t.users.email, d.email) });
+    // Um diretor cujo acesso foi removido pode voltar: a conta suspensa é reativada com novo convite.
+    const returning = existing && existing.roleId === role!.id && existing.status === "SUSPENDED" && !existing.deletedAt;
+    if (existing && !returning) fail("Já existe um utilizador com este email nesta instituição.");
+    let user;
+    if (returning) {
+      [user] = await db.update(t.users).set({ name: d.name, phone: d.phone, status: "INVITED", passwordHash: null }).where(eq(t.users.id, existing.id)).returning();
+    } else {
+      [user] = await db.insert(t.users).values({ ...d, kind: "STAFF", status: "INVITED", roleId: role!.id }).returning();
+      await db.insert(t.employees).values({ userId: user.id, jobTitle: "Diretor(a)" });
+    }
     const url = inviteUrl(inst.slug, await createAuthToken(db, user.id, "INVITE"));
     const mailed = await sendMail({ to: user.email, ...inviteMail(inst.name, user.name, url) });
     if (bool(fd, "makePrimary")) {

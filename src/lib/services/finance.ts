@@ -22,8 +22,10 @@ function dueDateFor(period: string, dueDay: number): string {
 /**
  * Gera as mensalidades de um mês para todas as crianças ativas com plano de
  * preço. Idempotente: nunca cria duas mensalidades para a mesma criança/mês.
+ * Uma mensalidade anulada só volta a ser criada com `recreateVoided` (pedido
+ * manual da direção); a geração automática diária respeita a anulação.
  */
-export async function generateMonthlyInvoices(db: TenantDb, period: string, today: string): Promise<{ created: number; skipped: number }> {
+export async function generateMonthlyInvoices(db: TenantDb, period: string, today: string, opts: { recreateVoided?: boolean } = {}): Promise<{ created: number; skipped: number }> {
   const settings = await db.query.settings.findFirst({ where: eq(t.settings.id, 1) });
   const kids = await db.query.children.findMany({ where: eq(t.children.status, "ACTIVE"), with: { feePlan: true } });
   let created = 0, skipped = 0;
@@ -32,7 +34,7 @@ export async function generateMonthlyInvoices(db: TenantDb, period: string, toda
     const made = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`inv:${kid.id}:${period}`}))`);
       const existing = await tx.query.invoices.findFirst({
-        where: and(eq(t.invoices.childId, kid.id), eq(t.invoices.period, period), eq(t.invoices.kind, "MONTHLY"), isNull(t.invoices.voidedAt)),
+        where: and(eq(t.invoices.childId, kid.id), eq(t.invoices.period, period), eq(t.invoices.kind, "MONTHLY"), opts.recreateVoided ? isNull(t.invoices.voidedAt) : undefined),
       });
       if (existing) return false;
       const [inv] = await tx.insert(t.invoices).values({

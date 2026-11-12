@@ -27,6 +27,8 @@ export async function createAnnouncementAction(_p: S, fd: FormData): Promise<Act
     if (body.length < 3 || body.length > 5000) fail("Escreva a mensagem do comunicado.");
     const classroomId = str(fd, "classroomId") || null;
     if (classroomId && !(await ctx.db.query.classrooms.findFirst({ where: eq(t.classrooms.id, classroomId) }))) fail("Turma inválida.");
+    // Quem só tem turmas atribuídas não pode enviar para outras turmas nem para toda a instituição.
+    if (ctx.classroomIds !== null && (!classroomId || !ctx.classroomIds.includes(classroomId))) fail("Só pode enviar comunicados para as suas turmas.");
     const [a] = await ctx.db.insert(t.announcements).values({ title, body, classroomId, createdById: ctx.user.id, createdByName: ctx.user.name }).returning();
     const recipients = await guardianUserIds(ctx, classroomId);
     await notify(ctx.db, recipients, { title: `Comunicado: ${title}`, body: body.slice(0, 140), href: `${ctx.base}/pais/comunicados` });
