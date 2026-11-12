@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { and, eq, gte, isNull, lte } from "drizzle-orm";
+import { ActionButton, ConfirmAction } from "@/components/ui/client";
 import { Badge, Card } from "@/components/ui/kit";
 import { t } from "@/db/tenant";
 import { fmtDate, money, todayIn } from "@/lib/format";
 import type { TenantCtx } from "@/lib/tenant";
+import { issueChildInvoiceAction, markInvoicePaidAction, markInvoiceUnpaidAction, sendPaymentReminderAction } from "@/server/finance";
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const WEEK = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -25,11 +27,13 @@ function shift(ym: string, delta: number): string {
  * (estado da mensalidade) e os dias do mês escolhido (presença e pagamentos).
  * Quem chama garante o acesso à criança; aqui só se escolhe o que mostrar.
  */
-export async function ChildCalendar({ ctx, childId, month, basePath, showFinance, showAttendance, manage }: {
+export async function ChildCalendar({ ctx, childId, month, basePath, showFinance, showAttendance, manage, canPay = false }: {
   ctx: TenantCtx; childId: string; month: string; basePath: string;
   showFinance: boolean; showAttendance: boolean;
   /** Gestão: os meses ligam à fatura, onde se regista o pagamento. */
   manage: boolean;
+  /** Pode marcar pago / não pago e enviar cobranças (permissão financeira de escrita). */
+  canPay?: boolean;
 }) {
   if (!showFinance && !showAttendance) return null;
   const today = todayIn(ctx.settings.timezone);
@@ -80,15 +84,13 @@ export async function ChildCalendar({ ctx, childId, month, basePath, showFinance
             const overdue = inv && (inv.status === "OPEN" || inv.status === "PARTIAL") && inv.dueDate < today;
             const lastPaid = inv?.payments.map((p) => p.paidAt).sort().at(-1);
             return (
-              <li key={ym} className={ym === month ? "bg-accent/5" : "bg-white"}>
-                <Link href={href(ym)} scroll={false} className="block p-2.5 hover:bg-surface">
+              <li key={ym} className={!inv ? "bg-white" : inv.status === "PAID" ? "bg-emerald-50" : "bg-red-50"}>
+                <Link href={href(ym)} scroll={false} className={`block p-2.5 hover:brightness-95 ${ym === month ? "ring-2 ring-inset ring-accent" : ""}`}>
                   <p className={`text-xs font-semibold ${ym === month ? "text-accent" : ""}`}>{label.slice(0, 3)} {y}</p>
                   <p className="mt-1.5">
                     {!inv ? <Badge>Sem fatura</Badge>
                       : inv.status === "PAID" ? <Badge tone="green">Pago</Badge>
-                      : overdue ? <Badge tone="red">Em atraso</Badge>
-                      : inv.status === "PARTIAL" ? <Badge tone="amber">Parcial</Badge>
-                      : <Badge tone="blue">Por pagar</Badge>}
+                      : <Badge tone="red">{overdue ? "Em atraso" : inv.status === "PARTIAL" ? "Parcial" : "Não pago"}</Badge>}
                   </p>
                   <p className="mt-1 text-[11px] leading-tight text-ink-soft">
                     {!inv ? "—" : inv.status === "PAID" ? `Pago a ${fmtDate(lastPaid ?? inv.dueDate)}` : `Falta ${money(inv.totalCents - inv.paidCents, cur)}`}
@@ -129,7 +131,7 @@ export async function ChildCalendar({ ctx, childId, month, basePath, showFinance
                 {a === "PRESENT" && <p className="text-emerald-700">Presente</p>}
                 {a === "ABSENT" && <p className="text-red-700">Falta</p>}
                 {paid !== undefined && <p className="font-medium text-emerald-800">Pagou {money(paid, cur)}</p>}
-                {due !== undefined && <p className={key < today ? "text-red-700" : "text-blue-700"}>Vence {money(due, cur)}</p>}
+                {due !== undefined && <p className="text-red-700">Vence {money(due, cur)}</p>}
               </div>
             </div>
           );
@@ -138,12 +140,43 @@ export async function ChildCalendar({ ctx, childId, month, basePath, showFinance
 
       {showFinance && (() => {
         const inv = monthly.get(month);
-        if (!inv) return <p className="border-t border-line px-4 py-3 text-sm text-ink-soft sm:px-5">Sem mensalidade emitida para {MONTHS[m - 1].toLowerCase()} de {y}.</p>;
+        const slug = ctx.institution.slug;
+        if (!inv) {
+          return (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-sm sm:px-5">
+              <p className="text-ink-soft">Sem mensalidade emitida para {MONTHS[m - 1].toLowerCase()} de {y}.</p>
+              {manage && canPay && <ActionButton action={issueChildInvoiceAction} hidden={{ slug, childId, period: month }} className="btn-primary btn-sm">Emitir mensalidade deste mês</ActionButton>}
+            </div>
+          );
+        }
+        const owed = inv.totalCents - inv.paidCents;
         return (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-sm sm:px-5">
-            <p>Mensalidade {inv.number}: <span className="font-medium">{money(inv.totalCents, cur)}</span> · pago {money(inv.paidCents, cur)} · vence a {fmtDate(inv.dueDate)}</p>
+          <div className="space-y-3 border-t border-line px-4 py-3 text-sm sm:px-5">
+            <div className="flex flex-wrap items-center gap-2">
+              {inv.status === "PAID" ? <Badge tone="green">Mês pago</Badge> : <Badge tone="red">{inv.dueDate < today ? "Mês em atraso" : "Mês não pago"}</Badge>}
+              <p>Mensalidade {inv.number}: <span className="font-medium">{money(inv.totalCents, cur)}</span> · pago {money(inv.paidCents, cur)} · vence a {fmtDate(inv.dueDate)}</p>
+            </div>
             <div className="flex flex-wrap gap-1.5">
-              {manage && <Link href={`${ctx.base}/gestao/mensalidades/${inv.id}`} className="btn btn-primary btn-sm">{inv.status === "PAID" ? "Ver fatura" : "Registar pagamento"}</Link>}
+              {manage && canPay && owed > 0 && (
+                <ConfirmAction action={markInvoicePaidAction} hidden={{ slug, invoiceId: inv.id }} label="Marcar como pago" triggerClass="btn-primary btn-sm"
+                  title="Marcar como pago" text={`Regista o pagamento de ${money(owed, cur)} com a data de hoje e emite o recibo.`} confirmLabel="Marcar como pago">
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium">Forma de pagamento</span>
+                    <select name="method" className="input" defaultValue="CASH">
+                      <option value="CASH">Dinheiro</option><option value="TRANSFER">Transferência</option><option value="DEPOSIT">Depósito</option><option value="CHEQUE">Cheque</option><option value="OTHER">Outro</option>
+                    </select>
+                  </label>
+                </ConfirmAction>
+              )}
+              {manage && canPay && owed > 0 && (
+                <ConfirmAction action={sendPaymentReminderAction} hidden={{ slug, invoiceId: inv.id }} label="Enviar cobrança aos pais" triggerClass="btn-secondary btn-sm"
+                  title="Enviar cobrança" text={`Os encarregados recebem um email e um aviso na aplicação com o valor em falta (${money(owed, cur)}).`} confirmLabel="Enviar cobrança" />
+              )}
+              {manage && canPay && inv.payments.length > 0 && (
+                <ConfirmAction action={markInvoiceUnpaidAction} hidden={{ slug, invoiceId: inv.id }} label="Marcar como não pago" danger
+                  title="Marcar como não pago" text="Os pagamentos deste mês são estornados e os recibos anulados. Ficam no histórico." confirmLabel="Marcar como não pago" />
+              )}
+              {manage && <Link href={`${ctx.base}/gestao/mensalidades/${inv.id}`} className="btn btn-ghost btn-sm">{owed > 0 ? "Pagamento parcial / detalhes" : "Ver fatura"}</Link>}
               {!manage && <a href={`${ctx.base}/fatura/${inv.id}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">Fatura PDF</a>}
               {inv.payments.map((p) => (
                 <a key={p.id} href={`${ctx.base}/recibo/${p.id}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">Recibo{inv.payments.length > 1 ? ` · ${money(p.amountCents, cur)}` : ""}</a>
