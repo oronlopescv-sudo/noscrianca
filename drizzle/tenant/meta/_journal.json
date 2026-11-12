@@ -43,6 +43,13 @@
       "when": 1794497185546,
       "tag": "0005_salarios",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794497983442,
+      "tag": "0006_inscricoes_comprovativos_agenda_ferias",
+      "breakpoints": true
     }
   ]
 }

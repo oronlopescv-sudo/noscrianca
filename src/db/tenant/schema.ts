@@ -316,6 +316,67 @@ export const settings = pgTable("settings", {
   updatedAt: updatedAt(),
 });
 
+/** Pedidos de inscrição feitos por visitantes na página pública. */
+export const enrollmentRequests = pgTable("enrollment_requests", {
+  id: id(),
+  guardianName: text("guardian_name").notNull(),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  childName: text("child_name").notNull(),
+  childBirthDate: text("child_birth_date"),
+  message: text("message").notNull().default(""),
+  /** NEW (por tratar), CONTACTED (em contacto) ou CLOSED (fechado). */
+  status: text("status").notNull().default("NEW"),
+  handledByName: text("handled_by_name"),
+  createdAt: createdAt(),
+}, (t) => [index("enrollment_status_idx").on(t.status)]);
+
+/** Comprovativos de pagamento enviados pelos encarregados, à espera de confirmação. */
+export const paymentProofs = pgTable("payment_proofs", {
+  id: id(),
+  invoiceId: text("invoice_id").notNull().references(() => invoices.id, { onDelete: "restrict" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  userName: text("user_name").notNull(),
+  path: text("path").notNull(),
+  note: text("note").notNull().default(""),
+  /** PENDING (por confirmar), ACCEPTED (pagamento registado) ou REJECTED (recusado). */
+  status: text("status").notNull().default("PENDING"),
+  reviewedByName: text("reviewed_by_name"),
+  reviewNote: text("review_note").notNull().default(""),
+  reviewedAt: ts("reviewed_at"),
+  createdAt: createdAt(),
+}, (t) => [index("proofs_invoice_idx").on(t.invoiceId), index("proofs_status_idx").on(t.status)]);
+
+/** Agenda da instituição: eventos, reuniões, feriados e férias. */
+export const events = pgTable("events", {
+  id: id(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  date: text("date").notNull(),
+  endDate: text("end_date"),
+  classroomId: text("classroom_id").references(() => classrooms.id, { onDelete: "set null" }),
+  /** ALL (pais e equipa), GUARDIANS (só pais) ou STAFF (só equipa). */
+  audience: text("audience").notNull().default("ALL"),
+  createdByName: text("created_by_name").notNull(),
+  createdAt: createdAt(),
+}, (t) => [index("events_date_idx").on(t.date)]);
+
+/** Férias e faltas da equipa, pedidas pelo funcionário e decididas pela direção. */
+export const staffLeaves = pgTable("staff_leaves", {
+  id: id(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+  /** VACATION (férias), SICK (doença) ou OTHER (outra falta). */
+  type: text("type").notNull(),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  notes: text("notes").notNull().default(""),
+  /** PENDING (por decidir), APPROVED (aprovado) ou REJECTED (recusado). */
+  status: text("status").notNull().default("PENDING"),
+  decidedByName: text("decided_by_name"),
+  decidedAt: ts("decided_at"),
+  createdAt: createdAt(),
+}, (t) => [index("leaves_employee_idx").on(t.employeeId), index("leaves_status_idx").on(t.status)]);
+
 /** Fotografias da página pública da instituição (visíveis a qualquer visitante). */
 export const publicPhotos = pgTable("public_photos", {
   id: id(),
@@ -406,6 +467,15 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
 }));
 export const receiptsRelations = relations(receipts, ({ one }) => ({
   payment: one(payments, { fields: [receipts.paymentId], references: [payments.id] }),
+}));
+export const paymentProofsRelations = relations(paymentProofs, ({ one }) => ({
+  invoice: one(invoices, { fields: [paymentProofs.invoiceId], references: [invoices.id] }),
+}));
+export const eventsRelations = relations(events, ({ one }) => ({
+  classroom: one(classrooms, { fields: [events.classroomId], references: [classrooms.id] }),
+}));
+export const staffLeavesRelations = relations(staffLeaves, ({ one }) => ({
+  employee: one(employees, { fields: [staffLeaves.employeeId], references: [employees.id] }),
 }));
 export const announcementsRelations = relations(announcements, ({ one }) => ({
   classroom: one(classrooms, { fields: [announcements.classroomId], references: [classrooms.id] }),

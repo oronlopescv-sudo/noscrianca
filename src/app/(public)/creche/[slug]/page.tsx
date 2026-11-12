@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { asc, eq } from "drizzle-orm";
-import { Clock, Mail, MapPin, Phone } from "lucide-react";
+import { CheckCircle2, Clock, Mail, MapPin, Phone } from "lucide-react";
+import { ActionForm, Submit } from "@/components/ui/client";
+import { Field } from "@/components/ui/kit";
 import { getTenantDb, t } from "@/db/tenant";
 import { ROOM_COLORS } from "@/lib/labels";
 import { getInstitutionBySlug, institutionUsable } from "@/lib/tenant";
+import { requestEnrollmentAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +36,9 @@ const ages = (min: number | null, max: number | null) => {
   return min != null && max != null ? `${f(min)} a ${f(max)}` : min != null ? `A partir de ${f(min)}` : `Até ${f(max!)}`;
 };
 
-export default async function PublicInstitution({ params }: { params: Promise<{ slug: string }> }) {
+export default async function PublicInstitution({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ pedido?: string }> }) {
   const { slug } = await params;
+  const sent = (await searchParams).pedido === "1";
   const d = await load(slug);
   if (!d) notFound();
   const { inst, s, photos, rooms } = d;
@@ -64,7 +68,10 @@ export default async function PublicInstitution({ params }: { params: Promise<{ 
               {inst.city && <p className="mt-1 text-sm opacity-90 sm:text-base">{inst.city}</p>}
             </div>
           </div>
-          <Link href={`/c/${slug}/entrar`} className="btn bg-white px-6 font-semibold text-ink hover:bg-white/90">Entrar na área reservada</Link>
+          <div className="flex flex-col gap-2 sm:items-end">
+            {inst.status !== "SUSPENDED" && <a href="#inscricao" className="btn bg-white px-6 font-semibold text-ink hover:bg-white/90">Pedir inscrição</a>}
+            <Link href={`/c/${slug}/entrar`} className="btn border border-white/50 px-6 text-white hover:bg-white/10">Entrar na área reservada</Link>
+          </div>
         </div>
       </section>
 
@@ -105,6 +112,34 @@ export default async function PublicInstitution({ params }: { params: Promise<{ 
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {inst.status !== "SUSPENDED" && (
+            <section id="inscricao" className="card card-pad scroll-mt-6">
+              <h2 className="text-lg">Pedir inscrição</h2>
+              {sent ? (
+                <div className="mt-4 flex items-start gap-3 rounded-btn border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                  <CheckCircle2 size={22} className="mt-0.5 shrink-0" />
+                  <p><span className="font-semibold">Pedido enviado.</span> A {name} recebeu os seus dados e vai entrar em contacto consigo.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="mb-4 mt-1 text-sm text-ink-soft">Deixe os seus dados e os da criança. A creche entra em contacto para combinar uma visita e explicar as condições. Este pedido não garante a vaga.</p>
+                  <ActionForm action={requestEnrollmentAction} hidden={{ slug }} className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="O seu nome"><input name="guardianName" className="input" required minLength={2} maxLength={120} autoComplete="name" /></Field>
+                      <Field label="Telefone"><input name="phone" type="tel" className="input" maxLength={40} autoComplete="tel" /></Field>
+                      <Field label="Email" className="sm:col-span-2" hint="Indique pelo menos o telefone ou o email"><input name="email" type="email" className="input" maxLength={160} autoComplete="email" /></Field>
+                      <Field label="Nome da criança"><input name="childName" className="input" required minLength={2} maxLength={120} /></Field>
+                      <Field label="Data de nascimento da criança"><input name="childBirthDate" type="date" className="input" /></Field>
+                    </div>
+                    <Field label="Mensagem (opcional)"><textarea name="message" className="input min-h-[90px]" maxLength={1000} placeholder="Quando gostaria de começar, horário pretendido, dúvidas…" /></Field>
+                    <input name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />
+                    <Submit className="btn-primary w-full sm:w-auto" pendingText="A enviar…">Enviar pedido de inscrição</Submit>
+                  </ActionForm>
+                </>
+              )}
             </section>
           )}
         </div>

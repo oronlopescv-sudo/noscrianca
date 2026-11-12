@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { asc } from "drizzle-orm";
 import { t } from "@/db/tenant";
+import { LeavesAdmin } from "@/components/tenant/leaves-admin";
 import { ActionButton, ActionForm, Modal, Submit } from "@/components/ui/client";
 import { Badge, Card, EmptyState, Field, PageHeader } from "@/components/ui/kit";
 import { USER_STATUS } from "@/lib/labels";
@@ -66,6 +67,7 @@ export default async function EmployeesPage({ params }: { params: Promise<{ slug
           </Modal>
         )}
       />
+      <LeavesAdmin ctx={ctx} />
       {employees.length === 0 ? <EmptyState title="Sem funcionários" text="Adicione a equipa e atribua cargos e turmas." /> : (
         <div className="grid gap-4 md:grid-cols-2">
           {employees.map((e) => (
