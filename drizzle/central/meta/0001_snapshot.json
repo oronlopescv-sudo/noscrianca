@@ -717,7 +717,8 @@
           "isUnique": true,
           "concurrently": false,
           "method": "btree",
-          "with": {}
+          "with": {},
+          "where": "status <> 'VOID'"
         }
       },
       "foreignKeys": {
