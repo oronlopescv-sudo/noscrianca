@@ -3,7 +3,7 @@ node_modules
 .env
 .env.local
 storage
-backups
+/backups
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store

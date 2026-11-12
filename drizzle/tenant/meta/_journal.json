@@ -15,6 +15,13 @@
       "when": 1794431669101,
       "tag": "0001_finance_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794478644420,
+      "tag": "0002_cobranca_avisos",
+      "breakpoints": true
     }
   ]
 }
