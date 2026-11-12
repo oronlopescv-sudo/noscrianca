@@ -104,18 +104,21 @@ export default async function MonthlyCalendar({ params, searchParams }: { params
               return (
                 <div key={i} className={`min-h-[64px] bg-white p-1.5 text-left ${isToday ? "ring-2 ring-accent ring-inset" : ""}`}>
                   <p className={`text-xs font-semibold ${isToday ? "text-accent" : ""}`}>{day}</p>
-                  {canAttendance && d && (
-                    <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
-                      <p className="text-emerald-700">{d.present} presentes</p>
-                      {d.absent > 0 && <p className="text-red-700">{d.absent} faltas</p>}
-                    </div>
-                  )}
-                  {canPayroll && staffByDay.get(key) && (
-                    <div className="mt-1 text-[11px] leading-tight">
-                      <p className="font-medium text-red-700">{staffByDay.get(key)!.length} falta(s) da equipa</p>
-                      <p className="truncate text-ink-soft">{staffByDay.get(key)!.join(", ")}</p>
-                    </div>
-                  )}
+                  {/* Telemóvel: só números (células estreitas). A partir de sm: texto completo. */}
+                  <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
+                    {canAttendance && d && (
+                      <p className="text-emerald-700"><span className="sm:hidden">{d.present}</span><span className="hidden sm:inline">{d.present} presentes</span></p>
+                    )}
+                    {canAttendance && d && d.absent > 0 && (
+                      <p className="text-red-700"><span className="sm:hidden">{d.absent}</span><span className="hidden sm:inline">{d.absent} faltas</span></p>
+                    )}
+                    {canPayroll && staffByDay.get(key) && (
+                      <>
+                        <p className="font-medium text-red-700"><span className="sm:hidden" title="Faltas da equipa">● {staffByDay.get(key)!.length}</span><span className="hidden sm:inline">{staffByDay.get(key)!.length} falta(s) da equipa</span></p>
+                        <p className="hidden truncate text-ink-soft sm:block">{staffByDay.get(key)!.join(", ")}</p>
+                      </>
+                    )}
+                  </div>
                 </div>
               );
             })}

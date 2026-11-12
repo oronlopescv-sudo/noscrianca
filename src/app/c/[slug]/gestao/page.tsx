@@ -37,7 +37,7 @@ export default async function ManagementDashboard({ params }: { params: Promise<
 
   const months = Array.from({ length: 6 }, (_, i) => addMonths(period, i - 5));
   const byMonth = new Map(revenue.map((r) => [r.m, r.v]));
-  const chart = months.map((m) => ({ label: periodLabel(m).split(" ")[0], value: byMonth.get(m) ?? 0 }));
+  const chart = months.map((m) => ({ label: periodLabel(m).split(" ")[0].slice(0, 3), value: byMonth.get(m) ?? 0 }));
   const recent = ctx.can("finance.view")
     ? await ctx.db.query.payments.findMany({ where: isNull(t.payments.reversedAt), orderBy: (p, { desc }) => desc(p.createdAt), limit: 5, with: { invoice: { with: { child: true } } } })
     : [];
