@@ -96,6 +96,16 @@ describe("finanças", () => {
     expect(manual.created).toBe(1);
   });
 
+  it("emitir a mensalidade só para uma criança não cria faturas para as outras", async () => {
+    const period = `${3000 + (Date.now() % 800)}-05`; // mês único por execução
+    const kid = await sol.db.query.children.findFirst({ where: eq(t.children.status, "ACTIVE") });
+    const r = await generateMonthlyInvoices(sol.db, period, `${period}-10`, { recreateVoided: true, childId: kid!.id });
+    expect(r.created).toBeLessThanOrEqual(1);
+    const invoices = await sol.db.select().from(t.invoices).where(eq(t.invoices.period, period));
+    expect(invoices.every((i) => i.childId === kid!.id)).toBe(true);
+    expect(invoices.length).toBe(r.created);
+  });
+
   it("pagamento atualiza o estado da fatura e recibo é emitido", async () => {
     const inv = await newInvoice();
     const director = await sol.db.query.users.findFirst({ where: eq(t.users.kind, "STAFF") });

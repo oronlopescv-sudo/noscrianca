@@ -49,14 +49,12 @@ export default async function GuardianFinance({ params, searchParams }: { params
                 const overdue = inv && (inv.status === "OPEN" || inv.status === "PARTIAL") && inv.dueDate < today;
                 const lastPaid = inv?.payments.map((p) => p.paidAt).sort().at(-1);
                 return (
-                  <li key={label} className="bg-white p-3">
+                  <li key={label} className={`p-3 ${!inv ? "bg-white" : inv.status === "PAID" ? "bg-emerald-50" : "bg-red-50"}`}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium">{label}</span>
                       {!inv ? <Badge>Sem fatura</Badge>
                         : inv.status === "PAID" ? <Badge tone="green">Pago</Badge>
-                        : overdue ? <Badge tone="red">Em atraso</Badge>
-                        : inv.status === "PARTIAL" ? <Badge tone="amber">Parcial</Badge>
-                        : <Badge tone="blue">Por pagar</Badge>}
+                        : <Badge tone="red">{overdue ? "Em atraso" : inv.status === "PARTIAL" ? "Parcial" : "Não pago"}</Badge>}
                     </div>
                     {inv && (
                       <div className="mt-2 space-y-1.5 text-xs text-ink-soft">
