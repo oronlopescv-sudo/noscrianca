@@ -1,3 +1,4 @@
+import { sanitizeBackupName } from "@/lib/backup-file";
 import { platformAudit, requirePlatform } from "@/lib/platform";
 import { centralBackupPath, downloadBackupResponse } from "@/lib/services/ops";
 
@@ -7,7 +8,7 @@ export async function GET(req: Request) {
   const fileName = new URL(req.url).searchParams.get("ficheiro") ?? "";
   const res = await downloadBackupResponse(centralBackupPath(fileName), fileName).catch((e) => new Response((e as Error).message, { status: 404 }));
   if (res.status === 200) {
-    await platformAudit(admin, "Cópia da base central descarregada", { entity: "backup", details: { ficheiro: fileName } });
+    await platformAudit(admin, "Cópia da base central descarregada", { entity: "backup", details: { ficheiro: sanitizeBackupName(fileName) } });
   }
   return res;
 }
