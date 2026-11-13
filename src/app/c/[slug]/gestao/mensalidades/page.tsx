@@ -1,17 +1,22 @@
 import Link from "next/link";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { t } from "@/db/tenant";
-import { ActionForm, ConfirmAction, Modal, Submit } from "@/components/ui/client";
-import { Badge, Card, EmptyState, Field, PageHeader } from "@/components/ui/kit";
-import { money, periodLabel, todayIn, centsToInput } from "@/lib/format";
+import { ActionForm, ConfirmAction, CopyField, Modal, Submit } from "@/components/ui/client";
+import { Badge, Card, EmptyState, Field, Notice, PageHeader } from "@/components/ui/kit";
+import { fmtDateObj, money, periodLabel, todayIn, centsToInput } from "@/lib/format";
+import { COOLDOWN_DAYS, collectionMessage, whatsappLink } from "@/lib/collection-rules";
+import { mailConfigured } from "@/lib/mail";
+import { guardianDebts } from "@/lib/services/collections";
 import { INVOICE_STATUS, CYCLE_LABEL } from "@/lib/labels";
 import { deleteFeePlanAction, generateInvoicesAction, createExtraInvoiceAction, saveFeePlanAction } from "@/server/finance";
-import { requireTenant } from "@/lib/tenant";
+import { sendGuardianCollectionAction, sendOverdueCollectionsAction } from "@/server/collections";
+import { reviewPaymentProofAction } from "@/server/extras";
+import { fileUrl, requireTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
 export default async function FinancePage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ estado?: string; mes?: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "finance.view" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "finance.view" });
   const sp = await searchParams;
   const slug = ctx.institution.slug;
   const cur = ctx.settings.currency;
@@ -27,6 +32,22 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
     }),
   ]);
   const filtered = sp.estado ? invoices : invoices.filter((i) => i.period === period);
+  const reminders = await ctx.db
+    .select({ number: t.invoices.number, childName: t.children.firstName, email: t.invoiceReminders.email, stage: t.invoiceReminders.stage, sentAt: t.invoiceReminders.sentAt })
+    .from(t.invoiceReminders)
+    .innerJoin(t.invoices, eq(t.invoices.id, t.invoiceReminders.invoiceId))
+    .innerJoin(t.children, eq(t.children.id, t.invoices.childId))
+    .orderBy(desc(t.invoiceReminders.sentAt)).limit(30);
+
+  const [proofs, overdue] = await Promise.all([
+    ctx.db.query.paymentProofs.findMany({ where: eq(t.paymentProofs.status, "PENDING"), orderBy: [asc(t.paymentProofs.createdAt)], with: { invoice: { with: { child: true } } } }),
+    ctx.db.query.invoices.findMany({ where: and(inArray(t.invoices.status, ["OPEN", "PARTIAL"]), isNull(t.invoices.voidedAt), lt(t.invoices.dueDate, today)), columns: { id: true, totalCents: true, paidCents: true } }),
+  ]);
+  const overdueTotal = overdue.reduce((a, i) => a + (i.totalCents - i.paidCents), 0);
+  // Cobrança por encarregado: um aviso com todas as mensalidades em aberto dos seus filhos.
+  const { guardians: debts, unlinked } = await guardianDebts(ctx.db, today);
+  const overdueGuardians = debts.filter((g) => g.overdueOwed > 0).length;
+  const mailOk = mailConfigured();
 
   return (
     <>
@@ -35,6 +56,12 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
         subtitle={`Mês de referência: ${periodLabel(period)}`}
         actions={canManage && (
           <>
+            {overdueGuardians > 0 && (
+              <ConfirmAction action={sendOverdueCollectionsAction} hidden={{ slug }} label={`Cobrar ${overdueGuardians} encarregado(s)`} triggerClass="btn-secondary"
+                title="Cobrar os encarregados em atraso"
+                text={`Cada encarregado recebe UMA mensagem com todas as mensalidades em atraso dos seus filhos (${money(overdueTotal, cur)} no total). ${mailOk ? "Chega por email e como aviso na aplicação." : "O email não está configurado no servidor: chega só como aviso na aplicação, a quem tem conta ativa."} Quem foi avisado nos últimos ${COOLDOWN_DAYS} dias fica de fora.`}
+                confirmLabel="Enviar cobranças" />
+            )}
             <Modal title="Gerar faturas mensais" trigger="Gerar faturas do mês" triggerClass="btn-secondary">
               <ActionForm action={generateInvoicesAction} hidden={{ slug }} className="space-y-4">
                 <Field label="Mês" hint="Gera uma fatura por criança ativa com mensalidade. Não duplica faturas já existentes."><input name="period" type="month" className="input" required defaultValue={period} /></Field>
@@ -57,10 +84,51 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
         )}
       />
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      {proofs.length > 0 && (
+        <Card title={`Comprovativos por confirmar (${proofs.length})`} className="mb-5 border-amber-300" pad={false}>
+          <ul className="divide-y divide-line">
+            {proofs.map((p) => {
+              const remaining = p.invoice.totalCents - p.invoice.paidCents;
+              return (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm sm:px-5">
+                  <div className="min-w-0">
+                    <p className="font-medium">{p.invoice.child.firstName} {p.invoice.child.lastName} · <Link href={`${ctx.base}/gestao/mensalidades/${p.invoice.id}`} className="link">{p.invoice.number}</Link></p>
+                    <p className="text-xs text-ink-soft">Enviado por {p.userName} · em falta {money(Math.max(remaining, 0), cur)}{p.note ? ` · "${p.note}"` : ""}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <a href={fileUrl(ctx, p.path) ?? "#"} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">Ver comprovativo</a>
+                    {canManage && remaining > 0 && (
+                      <Modal title={`Confirmar pagamento · ${p.invoice.number}`} trigger="Confirmar pagamento" triggerClass="btn-primary btn-sm">
+                        <ActionForm action={reviewPaymentProofAction} hidden={{ slug, proofId: p.id, decision: "ACCEPT" }} className="space-y-4">
+                          <p className="text-sm text-ink-soft">Confirme o valor que aparece no comprovativo. O pagamento é registado e o recibo emitido.</p>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <Field label={`Valor recebido (${cur})`}><input name="amount" className="input" inputMode="decimal" required defaultValue={centsToInput(remaining)} /></Field>
+                            <Field label="Data do pagamento"><input name="paidAt" type="date" className="input" required defaultValue={today} max={today} /></Field>
+                          </div>
+                          <Field label="Forma de pagamento">
+                            <select name="method" className="input" defaultValue="TRANSFER"><option value="TRANSFER">Transferência</option><option value="DEPOSIT">Depósito</option><option value="CASH">Dinheiro</option><option value="CHEQUE">Cheque</option><option value="OTHER">Outro</option></select>
+                          </Field>
+                          <div className="flex justify-end"><Submit>Confirmar e emitir recibo</Submit></div>
+                        </ActionForm>
+                      </Modal>
+                    )}
+                    {canManage && (
+                      <ConfirmAction action={reviewPaymentProofAction} hidden={{ slug, proofId: p.id, decision: "REJECT" }} label="Recusar" danger title="Recusar comprovativo" text="O encarregado é avisado e pode enviar outro comprovativo." confirmLabel="Recusar">
+                        <Field label="Motivo"><input name="reason" className="input" required minLength={3} maxLength={300} placeholder="Ex.: imagem ilegível, valor não coincide" /></Field>
+                      </ConfirmAction>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <Card title="Faturas" className="lg:col-span-2" pad={false}
           actions={
-            <form className="flex items-center gap-2" role="search">
+            <form className="flex flex-wrap items-center gap-2" role="search">
               <input type="month" name="mes" defaultValue={period} className="input h-9 w-auto py-1 text-sm" aria-label="Mês" />
               <select name="estado" defaultValue={sp.estado ?? ""} className="input h-9 w-auto py-1 text-sm" aria-label="Estado">
                 <option value="">Todas</option>
@@ -119,6 +187,69 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
           )}
         </Card>
       </div>
+      <Card title={`Encarregados com mensalidades em aberto (${debts.length})`} className="mt-5" pad={false}>
+        {!mailOk && (
+          <div className="p-4 sm:p-5"><Notice tone="amber">O email não está configurado no servidor: a cobrança chega como aviso na aplicação (só a quem tem conta ativa). Os restantes recebem por WhatsApp ou copiando a mensagem.</Notice></div>
+        )}
+        {unlinked.count > 0 && (
+          <div className="px-4 pt-4 sm:px-5"><Notice tone="amber">{unlinked.count} fatura(s) por {money(unlinked.owed, cur)} são de crianças sem encarregado associado. Associe o encarregado na ficha da criança para poder cobrar.</Notice></div>
+        )}
+        {debts.length === 0 ? (
+          <p className="p-5 text-sm text-ink-soft">Nenhum encarregado tem mensalidades em aberto.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {debts.map((g) => {
+              const msg = collectionMessage({ schoolName: ctx.settings.name, guardianName: g.name, invoices: g.invoices, owed: g.owed, currency: cur, paymentInfo: ctx.settings.paymentInfo });
+              const wa = g.phone ? whatsappLink(g.phone, msg.short) : null;
+              const kids = [...new Set(g.invoices.map((i) => i.childName.split(" ")[0]))].join(", ");
+              return (
+                <li key={g.userId} className="space-y-2.5 px-4 py-3.5 sm:px-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium">{g.name}</p>
+                      <p className="truncate text-xs text-ink-soft">{kids} · {g.email}</p>
+                      {!g.accountActive && <span className="mt-1 inline-block"><Badge tone="gray">Sem conta ativa</Badge></span>}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-semibold">{money(g.owed, cur)}</p>
+                      {g.overdueOwed > 0 && <p className="text-xs font-medium text-red-700">{money(g.overdueOwed, cur)} em atraso</p>}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {canManage && (
+                      <ConfirmAction action={sendGuardianCollectionAction} hidden={{ slug, userId: g.userId }} label="Enviar cobrança" triggerClass="btn-primary btn-sm"
+                        title={`Cobrar ${g.name}`}
+                        text={`Recebe uma mensagem com ${g.invoices.length} mensalidade(s) em aberto (${money(g.owed, cur)}), ${mailOk && g.email ? "por email e " : ""}como aviso na aplicação${g.accountActive ? "" : " (ainda não tem conta ativa, por isso só recebe o email, se existir)"}.`}
+                        confirmLabel="Enviar" />
+                    )}
+                    {wa ? <a href={wa} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">WhatsApp</a> : <span className="self-center text-xs text-ink-soft">Sem telefone</span>}
+                    <Modal title={`Mensagem para ${g.name}`} trigger="Copiar mensagem" triggerClass="btn-ghost btn-sm">
+                      <p className="mb-3 text-sm text-ink-soft">Copie e cole no WhatsApp, SMS ou email.</p>
+                      <CopyField value={msg.text} label="Mensagem completa" />
+                    </Modal>
+                  </div>
+                  <p className="text-xs text-ink-soft">Último aviso: {g.lastSentAt ? fmtDateObj(g.lastSentAt, ctx.settings.timezone) : "nunca"}</p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="border-t border-line px-4 py-3 text-xs text-ink-soft sm:px-5">Cada encarregado recebe uma só mensagem, com todas as mensalidades em aberto dos seus filhos.</p>
+      </Card>
+      <Card title="Avisos de cobrança enviados" className="mt-5" pad={false}>
+        {!reminders.length ? (
+          <p className="p-5 text-sm text-ink-soft">Ainda não foram enviados avisos. Ative-os nas definições da instituição.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {reminders.map((r, i) => (
+              <li key={i} className="flex flex-wrap justify-between gap-2 px-5 py-3 text-sm">
+                <span>Fatura {r.number} · {r.childName} · {r.stage === 0 ? "aviso manual" : `${r.stage} dia(s) após o vencimento`}</span>
+                <span className="text-ink-soft">{r.email} · {r.sentAt.toISOString().slice(0, 16).replace("T", " ")}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </>
   );
 }

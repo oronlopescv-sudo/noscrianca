@@ -204,6 +204,12 @@ export async function notify(db: TenantDb, userIds: string[], n: { title: string
   await db.insert(t.notifications).values(unique.map((userId) => ({ userId, title: n.title, body: n.body ?? "", href: n.href ?? "" })));
 }
 
+/** IDs dos funcionários ativos com uma permissão (os diretores têm sempre todas). */
+export async function staffWithPermission(db: TenantDb, permission: Permission): Promise<string[]> {
+  const staff = await db.query.users.findMany({ where: and(eq(t.users.kind, "STAFF"), eq(t.users.status, "ACTIVE"), isNull(t.users.deletedAt)), with: { role: true } });
+  return staff.filter((u) => u.role && (u.role.key === DIRECTOR_KEY || u.role.permissions.includes(permission))).map((u) => u.id);
+}
+
 export function panelHome(ctx: TenantCtx): string {
   return `${ctx.base}/${ctx.panel === "GUARDIAN" ? "pais" : ctx.panel === "CLASSROOM" ? "sala" : "gestao"}`;
 }

@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { and, asc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { ChildForm } from "@/components/tenant/child-form";
 import { Avatar, Badge, Card, EmptyState, PageHeader } from "@/components/ui/kit";
 import { Modal } from "@/components/ui/client";
-import { ageLabel, todayIn } from "@/lib/format";
+import { ageLabel, money, todayIn } from "@/lib/format";
 import { childScope, fileUrl, requireTenant, visibleClassrooms } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
 export default async function ChildrenPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ q?: string; estado?: string; turma?: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "children.view" });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "children.view" });
   const sp = await searchParams;
   const q = (sp.q ?? "").trim().slice(0, 80);
   const estado = sp.estado === "INACTIVE" ? "INACTIVE" : "ACTIVE";
@@ -24,6 +24,13 @@ export default async function ChildrenPage({ params, searchParams }: { params: P
   const classrooms = await visibleClassrooms(ctx, false);
   const feePlans = await ctx.db.query.feePlans.findMany({ orderBy: (f, { asc }) => asc(f.name) });
   const canManage = ctx.can("children.manage") && !ctx.readOnly;
+  // Mensalidade do mês atual de cada criança (só para quem tem permissão financeira).
+  const showFinance = ctx.can("finance.view");
+  const period = today.slice(0, 7);
+  const monthInvoices = showFinance && kids.length
+    ? await ctx.db.query.invoices.findMany({ where: and(inArray(t.invoices.childId, kids.map((k) => k.id)), eq(t.invoices.period, period), eq(t.invoices.kind, "MONTHLY"), isNull(t.invoices.voidedAt)) })
+    : [];
+  const invOf = new Map(monthInvoices.map((i) => [i.childId, i]));
 
   return (
     <>
@@ -53,7 +60,7 @@ export default async function ChildrenPage({ params, searchParams }: { params: P
         <Card pad={false}>
           <div className="overflow-x-auto">
             <table className="table">
-              <thead><tr><th>Criança</th><th>Idade</th><th>Turma</th><th>Encarregados</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Criança</th><th>Idade</th><th>Turma</th><th>Encarregados</th>{showFinance && <th>Mensalidade do mês</th>}<th>Estado</th></tr></thead>
               <tbody>
                 {kids.map((k) => (
                   <tr key={k.id}>
@@ -66,6 +73,17 @@ export default async function ChildrenPage({ params, searchParams }: { params: P
                     <td>{ageLabel(k.birthDate, today)}</td>
                     <td>{k.classroom?.name ?? <span className="text-ink-soft">Sem turma</span>}</td>
                     <td className="text-ink-soft">{k.guardians.map((g) => g.guardian.user.name).join(", ") || "—"}</td>
+                    {showFinance && (
+                      <td>
+                        {(() => {
+                          const inv = invOf.get(k.id);
+                          if (!inv) return <Badge>Sem fatura</Badge>;
+                          if (inv.status === "PAID") return <Badge tone="green">Pago</Badge>;
+                          const owed = money(inv.totalCents - inv.paidCents, ctx.settings.currency);
+                          return <Link href={`${ctx.base}/gestao/criancas/${k.id}#calendario`} className="inline-flex items-center gap-1.5"><Badge tone="red">{inv.dueDate < today ? "Em atraso" : "Não pago"}</Badge><span className="text-xs text-ink-soft">{owed}</span></Link>;
+                        })()}
+                      </td>
+                    )}
                     <td><Badge tone={k.status === "ACTIVE" ? "green" : "gray"}>{k.status === "ACTIVE" ? "Ativa" : "Inativa"}</Badge></td>
                   </tr>
                 ))}

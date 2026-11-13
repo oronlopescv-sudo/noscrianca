@@ -19,6 +19,12 @@ async function authorized(ctx: TenantCtx, parts: string[], rel: string): Promise
     }
     return false;
   }
+  if (area === "proofs" && id) {
+    // Comprovativos: equipa financeira, ou o encarregado que o enviou.
+    const proof = await ctx.db.query.paymentProofs.findFirst({ where: and(eq(t.paymentProofs.invoiceId, id), eq(t.paymentProofs.path, rel)) });
+    if (!proof) return false;
+    return ctx.isGuardian ? proof.userId === ctx.user.id : ctx.can("finance.view");
+  }
   if (area === "payments" && id) {
     if (ctx.isGuardian || !ctx.can("finance.view")) return false;
     return !!(await ctx.db.query.payments.findFirst({ where: and(eq(t.payments.invoiceId, id), eq(t.payments.proofPath, rel)) }));

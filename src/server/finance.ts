@@ -1,13 +1,15 @@
 "use server";
 
-import { and, count, eq, ne } from "drizzle-orm";
+import { after } from "next/server";
+import { and, count, eq, inArray, isNull, lt, ne } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import type { PaymentMethod } from "@/db/tenant/schema";
 import { isIsoDate, isPeriod, money, parseMoney, periodLabel, todayIn } from "@/lib/format";
 import { bool, fail, file, run, str, type ActionResult } from "@/lib/result";
 import { createExtraInvoice, generateMonthlyInvoices, METHOD_LABELS, recordPayment, reversePayment, voidInvoice } from "@/lib/services/finance";
+import { mailConfigured, sendMail } from "@/lib/mail";
 import { deleteTenantFile, saveUpload } from "@/lib/storage";
-import { audit, notify, tenantAction, type TenantCtx } from "@/lib/tenant";
+import { assertChildAccess, audit, notify, tenantAction, type TenantCtx } from "@/lib/tenant";
 
 type S = ActionResult | null;
 
@@ -55,7 +57,7 @@ export async function generateInvoicesAction(_p: S, fd: FormData): Promise<Actio
     const period = str(fd, "period");
     if (!isPeriod(period)) fail("Mês inválido.");
     const before = new Date();
-    const r = await generateMonthlyInvoices(ctx.db, period, todayIn(ctx.settings.timezone));
+    const r = await generateMonthlyInvoices(ctx.db, period, todayIn(ctx.settings.timezone), { recreateVoided: true });
     if (r.created > 0) {
       const fresh = await ctx.db.query.invoices.findMany({ where: and(eq(t.invoices.period, period), eq(t.invoices.kind, "MONTHLY")) });
       for (const inv of fresh.filter((i) => i.createdAt >= before)) {
@@ -75,6 +77,7 @@ export async function createExtraInvoiceAction(_p: S, fd: FormData): Promise<Act
     const childId = str(fd, "childId");
     const child = await ctx.db.query.children.findFirst({ where: eq(t.children.id, childId) });
     if (!child) fail("Escolha a criança.");
+    await assertChildAccess(ctx, childId);
     const description = str(fd, "description");
     if (description.length < 2 || description.length > 160) fail("Indique a descrição.");
     const amountCents = parseMoney(str(fd, "amount"));
@@ -135,3 +138,114 @@ export async function voidInvoiceAction(_p: S, fd: FormData): Promise<ActionResu
     return { ok: true, message: `Fatura ${inv.number} anulada.` };
   });
 }
+
+// ======================= GESTÃO RÁPIDA (ficha da criança) =======================
+
+/** Emite a mensalidade de um mês só para uma criança. Quando não é possível, diz a causa concreta. */
+export async function issueChildInvoiceAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "finance.manage" });
+    const childId = str(fd, "childId"), period = str(fd, "period");
+    if (!isPeriod(period)) fail("Mês inválido.");
+    await assertChildAccess(ctx, childId);
+    const kid = await ctx.db.query.children.findFirst({ where: eq(t.children.id, childId), with: { feePlan: true } });
+    if (!kid) fail("Criança não encontrada.");
+    const plan = kid.feePlan;
+    if (kid.status !== "ACTIVE") fail("A criança está inativa. Reative-a na ficha antes de emitir a mensalidade.");
+    if (!plan) fail("A criança não tem plano de mensalidade. Atribua um plano na ficha antes de emitir.");
+    if (!plan.active) fail("O plano de mensalidade desta criança está desativado. Escolha outro plano na ficha.");
+    if (kid.enrolledAt.slice(0, 7) > period) fail(`A criança só entrou em ${periodLabel(kid.enrolledAt.slice(0, 7))}. Não há mensalidade de um mês anterior à entrada.`);
+    const existing = await ctx.db.query.invoices.findFirst({
+      where: and(eq(t.invoices.childId, childId), eq(t.invoices.period, period), eq(t.invoices.kind, "MONTHLY"), isNull(t.invoices.voidedAt)),
+    });
+    if (existing) fail(`Já existe a mensalidade de ${periodLabel(period)} desta criança (fatura ${existing.number}).`);
+    const r = await generateMonthlyInvoices(ctx.db, period, todayIn(ctx.settings.timezone), { recreateVoided: true, childId });
+    if (!r.created) fail("Não foi possível emitir a mensalidade. Tente novamente.");
+    await audit(ctx, "Mensalidade emitida", { entity: "invoice", details: { mes: period, childId } });
+    return { ok: true, message: `Mensalidade de ${periodLabel(period)} emitida.` };
+  });
+}
+
+/** Marca a fatura como paga: regista o valor em falta e emite o recibo. */
+export async function markInvoicePaidAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "finance.manage" });
+    const inv = await ctx.db.query.invoices.findFirst({ where: eq(t.invoices.id, str(fd, "invoiceId")) });
+    if (!inv) fail("Fatura não encontrada.");
+    await assertChildAccess(ctx, inv!.childId);
+    const remaining = inv!.totalCents - inv!.paidCents;
+    if (inv!.status === "VOID" || remaining <= 0) fail("Esta fatura já está paga ou foi anulada.");
+    const method = (str(fd, "method") || "CASH") as PaymentMethod;
+    if (!(method in METHOD_LABELS)) fail("Método de pagamento inválido.");
+    const r = await recordPayment(ctx.db, {
+      invoiceId: inv!.id, amountCents: remaining, method, reference: "", paidAt: todayIn(ctx.settings.timezone), userId: ctx.user.id, userName: ctx.user.name,
+    });
+    await notify(ctx.db, await guardianUsersOfChild(ctx, inv!.childId), {
+      title: "Pagamento registado", body: `${money(remaining, ctx.settings.currency)} · recibo ${r.receipt.number}`, href: `${ctx.base}/pais/financeiro`,
+    });
+    await audit(ctx, "Fatura marcada como paga", { entity: "payment", entityId: r.payment.id, details: { fatura: inv!.number, recibo: r.receipt.number, valor: money(remaining, ctx.settings.currency), metodo: METHOD_LABELS[method] } });
+    return { ok: true, message: `Marcada como paga. Recibo ${r.receipt.number} emitido.` };
+  });
+}
+
+/** Marca a fatura como não paga: estorna os pagamentos (ficam no histórico como anulados). */
+export async function markInvoiceUnpaidAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "finance.manage" });
+    const inv = await ctx.db.query.invoices.findFirst({ where: eq(t.invoices.id, str(fd, "invoiceId")), with: { payments: { where: isNull(t.payments.reversedAt) } } });
+    if (!inv) fail("Fatura não encontrada.");
+    await assertChildAccess(ctx, inv!.childId);
+    if (!inv!.payments.length) fail("Esta fatura não tem pagamentos.");
+    for (const p of inv!.payments) await reversePayment(ctx.db, p.id, "Marcada como não paga", ctx.user.name);
+    await audit(ctx, "Fatura marcada como não paga", { entity: "invoice", entityId: inv!.id, details: { numero: inv!.number, pagamentosEstornados: inv!.payments.length } });
+    return { ok: true, message: "Marcada como não paga. Os pagamentos ficam no histórico como estornados." };
+  });
+}
+
+/** Botão de cobrança: avisa os encarregados por email e na aplicação. */
+export async function sendPaymentReminderAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "finance.manage" });
+    const inv = await ctx.db.query.invoices.findFirst({ where: eq(t.invoices.id, str(fd, "invoiceId")), with: { child: true } });
+    if (!inv) fail("Fatura não encontrada.");
+    await assertChildAccess(ctx, inv!.childId);
+    const owed = inv!.totalCents - inv!.paidCents;
+    if (inv!.status === "VOID" || owed <= 0) fail("Esta fatura não tem valor em dívida.");
+    const rows = await ctx.db.select({ userId: t.users.id, name: t.users.name, email: t.users.email, status: t.users.status, deletedAt: t.users.deletedAt })
+      .from(t.childGuardians)
+      .innerJoin(t.guardians, eq(t.guardians.id, t.childGuardians.guardianId))
+      .innerJoin(t.users, eq(t.users.id, t.guardians.userId))
+      .where(eq(t.childGuardians.childId, inv!.childId));
+    const recipients = rows.filter((r) => r.status !== "SUSPENDED" && !r.deletedAt && r.email);
+    if (!recipients.length) fail("Esta criança não tem encarregados com email para avisar.");
+    const due = money(owed, ctx.settings.currency);
+    const today = todayIn(ctx.settings.timezone);
+    const late = inv!.dueDate < today;
+    const s = ctx.settings;
+    let mailed = 0;
+    if (mailConfigured()) {
+      for (const g of recipients) {
+        const ok = await sendMail({
+          to: g.email, replyTo: s.email || undefined,
+          subject: `${late ? "Pagamento em atraso" : "Pagamento por regularizar"}: ${inv!.child.firstName} (fatura ${inv!.number})`,
+          text: [
+            `Olá ${g.name},`, "",
+            `A fatura ${inv!.number} de ${inv!.child.firstName} ${late ? "está em atraso" : "aguarda pagamento"}.`,
+            `Valor em falta: ${due}. Vencimento: ${inv!.dueDate.split("-").reverse().join("/")}.`, "",
+            s.paymentInfo ? `Como pagar:\n${s.paymentInfo}` : "Contacte a creche para saber como pagar.", "",
+            "Se já pagou, pode ignorar esta mensagem. Obrigado.", s.name,
+          ].join("\n"),
+        });
+        if (ok) mailed++;
+      }
+    }
+    await notify(ctx.db, recipients.filter((r) => r.status === "ACTIVE").map((r) => r.userId), {
+      title: `Fatura ${inv!.number} por pagar`, body: `Valor em falta: ${due}`, href: `${ctx.base}/pais/financeiro`,
+    });
+    await audit(ctx, "Cobrança enviada", { entity: "invoice", entityId: inv!.id, details: { numero: inv!.number, emails: mailed, destinatarios: recipients.length } });
+    if (!mailConfigured()) return { ok: true, message: "Aviso enviado na aplicação. O email não está configurado no servidor, por isso não foi enviado email." };
+    if (mailed < recipients.length) return { ok: true, message: `Aviso enviado: ${mailed} de ${recipients.length} email(s) entregues ao serviço de envio.` };
+    return { ok: true, message: `Cobrança enviada por email a ${mailed} encarregado(s).` };
+  });
+}
+

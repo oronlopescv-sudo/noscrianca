@@ -22,6 +22,48 @@
       "when": 1794495295694,
       "tag": "0002_child_inactive_periods",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794495295695,
+      "tag": "0003_cobranca_avisos",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794496719821,
+      "tag": "0004_pagina_publica",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794497137351,
+      "tag": "0005_comunicados_destinatarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794497185546,
+      "tag": "0006_salarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794497983442,
+      "tag": "0007_inscricoes_comprovativos_agenda_ferias",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794503545656,
+      "tag": "0008_faltas_equipa",
+      "breakpoints": true
     }
   ]
 }

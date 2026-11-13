@@ -12,7 +12,7 @@ import { ALL_PERMISSIONS, DIRECTOR_KEY, type Permission } from "@/lib/permission
 import { bool, fail, file, run, str, type ActionResult } from "@/lib/result";
 import { createAuthToken, inviteMail, inviteUrl, resetUrl } from "@/lib/services/accounts";
 import { deleteTenantFile, saveUpload } from "@/lib/storage";
-import { assertChildAccess, audit, tenantAction, type TenantCtx } from "@/lib/tenant";
+import { assertChildAccess, audit, staffCanSeeGuardian, tenantAction, type TenantCtx } from "@/lib/tenant";
 
 type S = ActionResult | null;
 const email = z.string().trim().toLowerCase().email("Email inválido.").max(160);
@@ -259,7 +259,7 @@ export async function updateGuardianAction(_p: S, fd: FormData): Promise<ActionR
   return run(async () => {
     const ctx = await tenantAction(str(fd, "slug"), { permission: "guardians.manage" });
     const g = await ctx.db.query.guardians.findFirst({ where: eq(t.guardians.id, str(fd, "guardianId")) });
-    if (!g) fail("Encarregado não encontrado.");
+    if (!g || !(await staffCanSeeGuardian(ctx, g.id))) fail("Encarregado não encontrado.");
     const d = z.object({ name: personName, phone: z.string().trim().max(40) }).parse({ name: str(fd, "name"), phone: str(fd, "phone") });
     await ctx.db.update(t.users).set(d).where(eq(t.users.id, g!.userId));
     await ctx.db.update(t.guardians).set({
@@ -376,6 +376,11 @@ export async function saveRoleAction(_p: S, fd: FormData): Promise<ActionResult>
     const ctx = await tenantAction(str(fd, "slug"), { permission: "roles.manage" });
     const id = str(fd, "roleId");
     const d = roleInput(fd);
+    // Só o diretor pode alterar o próprio cargo ou conceder permissões que não tem.
+    if (!ctx.isDirector) {
+      if (id && id === ctx.role?.id) fail("Não pode alterar o seu próprio cargo.");
+      if (d.permissions.some((p) => !ctx.can(p))) fail("Não pode conceder permissões que o seu cargo não tem.");
+    }
     const dup = await ctx.db.query.roles.findFirst({ where: and(eq(t.roles.name, d.name), id ? ne(t.roles.id, id) : undefined) });
     if (dup) fail("Já existe um cargo com este nome.");
     if (id) {

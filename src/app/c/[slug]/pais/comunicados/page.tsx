@@ -1,4 +1,4 @@
-import { desc, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, inArray, isNull, ne, or } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { AnnouncementList } from "@/components/tenant/announcements";
 import { PageHeader } from "@/components/ui/kit";
@@ -12,7 +12,10 @@ export default async function GuardianAnnouncements({ params }: { params: Promis
   const kids = ids.length ? await ctx.db.query.children.findMany({ where: inArray(t.children.id, ids), columns: { classroomId: true } }) : [];
   const classroomIds = [...new Set(kids.map((k) => k.classroomId).filter((x): x is string => !!x))];
   const rows = await ctx.db.query.announcements.findMany({
-    where: classroomIds.length ? or(isNull(t.announcements.classroomId), inArray(t.announcements.classroomId, classroomIds)) : isNull(t.announcements.classroomId),
+    where: and(
+      ne(t.announcements.audience, "STAFF"), // comunicados só para a equipa não aparecem aos pais
+      classroomIds.length ? or(isNull(t.announcements.classroomId), inArray(t.announcements.classroomId, classroomIds)) : isNull(t.announcements.classroomId),
+    ),
     orderBy: [desc(t.announcements.createdAt)], limit: 100, with: { classroom: true },
   });
   return (

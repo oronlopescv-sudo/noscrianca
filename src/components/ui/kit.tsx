@@ -20,9 +20,9 @@ export function Card({ title, actions, children, className, pad = true }: { titl
   return (
     <section className={clsx("card", className)}>
       {(title || actions) && (
-        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-          <h2 className="text-[15px]">{title}</h2>
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line px-4 py-3 sm:px-5">
+          <h2 className="min-w-0 text-[15px]">{title}</h2>
+          {actions && <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">{actions}</div>}
         </div>
       )}
       <div className={pad ? "card-pad" : undefined}>{children}</div>
@@ -75,7 +75,7 @@ export function Stat({ label, value, hint, icon, tone = "accent" }: { label: str
       {icon && <span className={clsx("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", TONES[tone])}>{icon}</span>}
       <div className="min-w-0">
         <p className="text-xs font-medium text-ink-soft">{label}</p>
-        <p className="truncate text-xl font-semibold">{value}</p>
+        <p className="break-words text-lg font-semibold leading-tight sm:text-xl">{value}</p>
         {hint && <p className="mt-0.5 text-xs text-ink-soft">{hint}</p>}
       </div>
     </div>
