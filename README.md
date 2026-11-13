@@ -48,9 +48,27 @@ Os testes de integração cobrem o isolamento entre bases de dados (uma creche n
 npm run tenants:migrate                 # aplica migrações a todas as instituições ativas
 npm run tenants:backup -- <slug>        # cópia de segurança manual (formato pg_dump)
 npm run tenants:restore -- <slug> <id>  # repõe uma cópia (o id está na tabela backup_records)
+npm run tenants:central-backup          # cópia da base central (plataforma)
+npm run tenants:central-list            # lista as cópias da central no servidor
+npm run tenants:central-restore -- <f>  # repõe a central a partir de um ficheiro (site PARADO)
 ```
 
-As cópias automáticas são feitas diariamente e apagadas após `BACKUP_RETENTION_DAYS` dias (14 por omissão). As cópias manuais são mantidas.
+As cópias automáticas são feitas diariamente (instituições **e central**) e apagadas após `BACKUP_RETENTION_DAYS` dias (14 por omissão). As cópias manuais e os ficheiros subidos pelo painel são mantidos.
+
+No painel do admin, em **Backups**, cada cópia pode ser **descarregada** para fora do servidor — faça isso regularmente: se o servidor se perder, os ficheiros que estavam só no disco perdem-se com ele. Um ficheiro descarregado pode ser **subido de volta** («Carregar cópia»), validado e depois restaurado.
+
+### Recuperação de desastre (o servidor perdeu-se)
+
+1. Instale o sistema num servidor novo e confirme que o painel abre (base central vazia).
+2. Pare o site e restaure a base central a partir da cópia mais recente que tenha fora do servidor:
+   copie o ficheiro para a pasta de backups (`BACKUP_DIR/platform/`) e corra
+   `npm run tenants:central-restore -- <ficheiro>.dump`. Isto devolve os administradores da
+   plataforma, as instituições, os planos e o registo das cópias.
+3. Inicie o site, entre no painel e, para cada instituição, suba o ficheiro da sua cópia
+   (**Instituição → Backups → Carregar cópia**) e restaure por lá.
+4. Se só se perdeu uma instituição (não a central), basta o passo 3: subir e restaurar.
+
+As cópias contêm todos os dados da instituição (incluindo haxixes de senhas, para os logins continuarem válidos). Guarde-as cifradas ou num local privado.
 
 ## Deploy num VPS (Docker)
 

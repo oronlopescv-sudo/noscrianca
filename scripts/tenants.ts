@@ -2,7 +2,8 @@ import "./_env";
 import { eq } from "drizzle-orm";
 import { central, c, closeCentral } from "@/db/central";
 import { closeAllTenantPools } from "@/db/tenant";
-import { backupInstitution, migrateAllTenants, restoreInstitution } from "@/lib/services/ops";
+import { backupCentral, backupInstitution, listCentralBackups, migrateAllTenants, restoreCentralBackup, restoreInstitution } from "@/lib/services/ops";
+import { bytes, fmtDateTime } from "@/lib/format";
 import { hardenTenantIsolation } from "@/lib/services/provisioning";
 
 /**
@@ -11,6 +12,9 @@ import { hardenTenantIsolation } from "@/lib/services/provisioning";
  *                                            e endurece o isolamento das roles (sem CONNECT)
  *   npm run tenants:backup -- <slug>         cópia de segurança manual de uma instituição
  *   npm run tenants:restore -- <slug> <id>   repõe uma cópia de segurança (id em backup_records)
+ *   npm run tenants:central-backup           cópia da base central (plataforma)
+ *   npm run tenants:central-list             lista as cópias da central no servidor
+ *   npm run tenants:central-restore -- <f>   repõe a central a partir de um ficheiro (site PARADO!)
  */
 async function main() {
   const [cmd, slug, extra] = process.argv.slice(2);
@@ -20,6 +24,22 @@ async function main() {
     if (report.some((r) => !r.ok)) process.exitCode = 1;
     const hardened = await hardenTenantIsolation();
     console.log(`Isolamento verificado em ${hardened} base(s) de dados.`);
+    return;
+  }
+  if (cmd === "central-backup") {
+    const r = await backupCentral();
+    console.log(`Cópia da central criada: ${r.fileName} (${bytes(r.sizeBytes)}).`);
+    return;
+  }
+  if (cmd === "central-list") {
+    for (const f of await listCentralBackups()) console.log(`${f.fileName}  ${bytes(f.sizeBytes)}  ${fmtDateTime(f.createdAt)}`);
+    if ((await listCentralBackups()).length === 0) console.log("Sem cópias da central no servidor.");
+    return;
+  }
+  if (cmd === "central-restore") {
+    if (!slug) throw new Error("Indique o ficheiro de cópia: npm run tenants:central-restore -- <nome-do-ficheiro> (veja com tenants:central-list)");
+    await restoreCentralBackup(slug);
+    console.log("Central restaurada. Inicie o site de novo e verifique o login do admin.");
     return;
   }
   if (cmd === "backup" || cmd === "restore") {
@@ -36,7 +56,7 @@ async function main() {
     }
     return;
   }
-  console.log("Uso: tenants.ts migrate | backup <slug> | restore <slug> <backupId>");
+  console.log("Uso: tenants.ts migrate | backup <slug> | restore <slug> <backupId> | central-backup | central-list | central-restore <ficheiro>");
   process.exitCode = 1;
 }
 
