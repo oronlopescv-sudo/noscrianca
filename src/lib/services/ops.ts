@@ -50,7 +50,13 @@ export async function backupCentral() {
   await mkdir(folder, { recursive: true });
   const fileName = `central-${new Date().toISOString().replace(/[:.]/g, "-")}.dump`;
   const full = path.join(folder, fileName);
-  await runTool("pg_dump", ["--format=custom", "--no-owner", "--no-privileges", `--file=${full}`], env.centralUrl);
+  try {
+    await runTool("pg_dump", ["--format=custom", "--no-owner", "--no-privileges", `--file=${full}`], env.centralUrl);
+  } catch (e) {
+    // Um dump a meio não é uma cópia: não pode ficar listado nem descarregável.
+    await unlink(full).catch(() => {});
+    throw e;
+  }
   const size = (await stat(full)).size;
   return { fileName, sizeBytes: size, createdAt: new Date() };
 }
@@ -94,7 +100,10 @@ export async function restoreCentralBackup(fileName: string) {
 // antes, para restaurar num servidor novo.
 // ---------------------------------------------------------------------------
 
-export const backupUploadMaxBytes = Number(process.env.BACKUP_UPLOAD_MAX_MB || 256) * 1_000_000;
+// Limite da subida: se a variável estiver mal posta (não numérica), fica 256 MB
+// em vez de desligar o limite.
+const MB_MAX = Number(process.env.BACKUP_UPLOAD_MAX_MB ?? 256);
+export const backupUploadMaxBytes = Number.isFinite(MB_MAX) && MB_MAX > 0 ? Math.ceil(MB_MAX * 1_000_000) : 256_000_000;
 
 /**
  * Guarda no servidor uma cópia subida pelo admin: valida o formato pg_dump
@@ -102,8 +111,10 @@ export const backupUploadMaxBytes = Number(process.env.BACKUP_UPLOAD_MAX_MB || 2
  * o ficheiro se algo falhar. Devolve o nome usado no disco.
  */
 export async function savePgDumpUpload(folder: string, originalName: string, body: ReadableStream): Promise<{ fileName: string; sizeBytes: number; path: string }> {
+  // A extensão vê-se ANTES de cortar o nome: um nome comprido não deve perder
+  // o ".dump" e ser recusado por isso.
+  if (!isPgDumpExtension(originalName.split(/[\\/]/).pop() ?? "")) throw new Error("O ficheiro não é uma cópia pg_dump (esperava .dump ou .backup).");
   const clean = sanitizeBackupName(originalName);
-  if (!isPgDumpExtension(clean)) throw new Error("O ficheiro não é uma cópia pg_dump (esperava .dump ou .backup).");
   const fileName = `subida-${new Date().toISOString().replace(/[:.]/g, "-")}-${clean}`;
   await mkdir(folder, { recursive: true });
   const full = path.join(folder, fileName);
@@ -145,10 +156,16 @@ export async function saveInstitutionBackupUpload(institutionId: string, origina
   const inst = await central().query.institutions.findFirst({ where: eq(c.institutions.id, institutionId) });
   if (!inst) throw new Error("Instituição não encontrada.");
   const saved = await savePgDumpUpload(backupFolder(inst.slug), originalName, body);
-  const [rec] = await central().insert(c.backupRecords).values({
-    institutionId: inst.id, fileName: saved.fileName, sizeBytes: saved.sizeBytes, manual: true, status: "DONE",
-  }).returning();
-  return { recordId: rec.id, ...saved, slug: inst.slug };
+  try {
+    const [rec] = await central().insert(c.backupRecords).values({
+      institutionId: inst.id, fileName: saved.fileName, sizeBytes: saved.sizeBytes, manual: true, status: "DONE",
+    }).returning();
+    return { recordId: rec.id, ...saved, slug: inst.slug };
+  } catch (e) {
+    // Sem registo, o painel nunca vê o ficheiro: não deixa órfão no disco.
+    await unlink(saved.path).catch(() => {});
+    throw e;
+  }
 }
 
 /** Guarda uma cópia subida DA CENTRAL (sem registo na própria central — é a BD que está a ser copiada). */
@@ -213,9 +230,11 @@ export async function restoreInstitution(institutionId: string, backupId: string
 export async function pruneBackups() {
   const cutoff = new Date(Date.now() - env.backupRetentionDays * 86_400_000);
   // Cópias da central não têm registo na BD (é a própria BD que se copia):
-  // aplicam-se-lhes os mesmos dias de retenção.
+  // só as automáticas (nome «central-…») expiram; as subidas pelo painel não
+  // têm registo e não se pode distinguir uma intenção de restauro — mantêm-se,
+  // como as cópias manuais das instituições.
   const platform = platformFolder();
-  for (const f of (await listCentralBackups()).filter((f) => f.createdAt < cutoff)) {
+  for (const f of (await listCentralBackups()).filter((f) => f.createdAt < cutoff && f.fileName.startsWith("central-"))) {
     await unlink(path.join(platform, f.fileName)).catch(() => {});
   }
   const old = await central().query.backupRecords.findMany({
