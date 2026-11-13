@@ -95,7 +95,7 @@ export const salaryPayments = pgTable("salary_payments", {
   index("salary_period_idx").on(t.period),
   check("salary_amount_ck", sql`${t.amountCents} >= 0`),
   check("salary_base_ck", sql`${t.baseCents} is null or ${t.baseCents} >= 0`),
-  check("salary_absence_ck", sql`${t.absenceDiscountCents} >= 0 and ${t.absentDays} >= 0 and ${t.absenceDiscountCents} <= ${t.amountCents}`),
+  check("salary_absence_ck", sql`${t.absenceDiscountCents} >= 0 and ${t.absentDays} >= 0 and ${t.absenceDiscountCents} <= coalesce(${t.baseCents}, ${t.amountCents})`),
 ]);
 
 export const guardians = pgTable("guardians", {
