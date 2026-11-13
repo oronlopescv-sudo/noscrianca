@@ -9,7 +9,13 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN npm run build \
+# O servidor standalone não traz devDependencies (tsx) nem a pasta scripts/,
+# mas as operações de manutenção (migrações manuais, cópias, restauro) têm de
+# continuar possíveis DENTRO do container: empacotamos a CLI para um único
+# ficheiro (as dependências externas ficam no node_modules prunado do standalone).
+ && node_modules/.bin/esbuild scripts/tenants.ts --bundle --platform=node \
+    --target=node22 --format=cjs --outfile=.next/ops.js
 
 FROM node:22-bookworm-slim AS run
 WORKDIR /app
@@ -29,6 +35,7 @@ COPY --from=build --chown=nc:nc /app/.next/standalone ./
 COPY --from=build --chown=nc:nc /app/.next/static ./.next/static
 COPY --from=build --chown=nc:nc /app/public ./public
 COPY --from=build --chown=nc:nc /app/drizzle ./drizzle
+COPY --from=build --chown=nc:nc /app/.next/ops.js ./ops.js
 USER nc
 VOLUME ["/app/storage", "/app/backups"]
 EXPOSE 3000

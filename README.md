@@ -44,6 +44,8 @@ Os testes de integração cobrem o isolamento entre bases de dados (uma creche n
 
 ## Cópias de segurança e migrações
 
+Em desenvolvimento:
+
 ```bash
 npm run tenants:migrate                 # aplica migrações a todas as instituições ativas
 npm run tenants:backup -- <slug>        # cópia de segurança manual (formato pg_dump)
@@ -53,6 +55,12 @@ npm run tenants:central-list            # lista as cópias da central no servido
 npm run tenants:central-restore -- <f>  # repõe a central a partir de um ficheiro (site PARADO)
 ```
 
+Em produção (imagem Docker) não há passos manuais de migração: **a cada arranque**, o
+servidor aplica sózinho as migrações da central e de todas as instituições ativas
+(idempotente — migrações já aplicadas não voltam a correr). Dentro do container, os
+comandos de manutenção equivalentes usam a CLI empacotada (`node ops.js …`), por exemplo
+`docker exec <app> node ops.js backup <slug>`.
+
 As cópias automáticas são feitas diariamente (instituições **e central**) e apagadas após `BACKUP_RETENTION_DAYS` dias (14 por omissão). As cópias manuais e os ficheiros subidos pelo painel são mantidos.
 
 No painel do admin, em **Backups**, cada cópia pode ser **descarregada** para fora do servidor — faça isso regularmente: se o servidor se perder, os ficheiros que estavam só no disco perdem-se com ele. Um ficheiro descarregado pode ser **subido de volta** («Carregar cópia»), validado e depois restaurado.
@@ -61,9 +69,9 @@ No painel do admin, em **Backups**, cada cópia pode ser **descarregada** para f
 
 1. Instale o sistema num servidor novo e confirme que o painel abre (base central vazia).
 2. Pare o site e restaure a base central a partir da cópia mais recente que tenha fora do servidor:
-   copie o ficheiro para a pasta de backups (`BACKUP_DIR/platform/`) e corra
-   `npm run tenants:central-restore -- <ficheiro>.dump`. Isto devolve os administradores da
-   plataforma, as instituições, os planos e o registo das cópias.
+   copie o ficheiro para a pasta de backups (`BACKUP_DIR/platform/`) e corra, em desenvolvimento,
+   `npm run tenants:central-restore -- <ficheiro>.dump` (no container: `node ops.js central-restore <ficheiro>.dump`).
+   Isto devolve os administradores da plataforma, as instituições, os planos e o registo das cópias.
 3. Inicie o site, entre no painel e, para cada instituição, suba o ficheiro da sua cópia
    (**Instituição → Backups → Carregar cópia**) e restaure por lá.
 4. Se só se perdeu uma instituição (não a central), basta o passo 3: subir e restaurar.
