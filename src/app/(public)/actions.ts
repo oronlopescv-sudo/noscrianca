@@ -1,12 +1,14 @@
 "use server";
 
 import { z } from "zod";
+import { and, count, gte } from "drizzle-orm";
 import { central, c } from "@/db/central";
 import { getTenantDb, t } from "@/db/tenant";
 import { isIsoDate } from "@/lib/format";
 import { getInstitutionBySlug, institutionUsable, notify, staffWithPermission } from "@/lib/tenant";
 import { lockedFor, recordFailure } from "@/lib/auth";
 import { fail, run, str, type ActionResult } from "@/lib/result";
+import { clientIp } from "@/lib/request-ip";
 import { headers } from "next/headers";
 
 const signupSchema = z.object({
@@ -22,10 +24,14 @@ const signupSchema = z.object({
 export async function requestSignupAction(_p: ActionResult | null, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     if (str(fd, "website")) return { ok: true, redirect: "/pedir-adesao?enviado=1" }; // honeypot anti-spam
-    const ip = ((await headers()).get("x-forwarded-for") ?? "local").split(",")[0].trim();
+    const ip = clientIp(await headers());
     const key = `signup:${ip}`;
     if (await lockedFor(key)) fail("Demasiados pedidos. Tente novamente mais tarde.");
     await recordFailure(key);
+    // Quota global de 24h (independente do ip, que pode ser falseado pelo cliente).
+    const since = new Date(Date.now() - 24 * 3_600_000);
+    const [{ n }] = await central().select({ n: count() }).from(c.signupRequests).where(gte(c.signupRequests.createdAt, since));
+    if (n >= 50) fail("Demasiados pedidos. Tente novamente mais tarde.");
     const d = signupSchema.parse({
       institutionName: str(fd, "institutionName"), contactName: str(fd, "contactName"), email: str(fd, "email").toLowerCase(),
       phone: str(fd, "phone"), city: str(fd, "city"), childrenEstimate: str(fd, "childrenEstimate"), message: str(fd, "message"),
@@ -58,17 +64,22 @@ export async function requestEnrollmentAction(_p: ActionResult | null, fd: FormD
     if (str(fd, "website")) return { ok: true, redirect: "/" }; // honeypot anti-spam
     const inst = await getInstitutionBySlug(str(fd, "slug"));
     if (!inst || !institutionUsable(inst.status) || inst.status === "SUSPENDED") fail("Esta instituição não está a aceitar pedidos.");
-    const ip = ((await headers()).get("x-forwarded-for") ?? "local").split(",")[0].trim();
+    const ip = clientIp(await headers());
     const key = `enroll:${inst!.id}:${ip}`;
     if (await lockedFor(key)) fail("Demasiados pedidos. Tente novamente mais tarde.");
     await recordFailure(key);
+    // Quota por instituição nas 24h (independente do ip, que o cliente pode
+    // falsear): um volume anómalo de inscrições é barrado mesmo assim.
+    const since = new Date(Date.now() - 24 * 3_600_000);
+    const db = await getTenantDb(inst!.id);
+    const [{ n }] = await db.select({ n: count() }).from(t.enrollmentRequests).where(gte(t.enrollmentRequests.createdAt, since));
+    if (n >= 50) fail("Demasiados pedidos. Tente novamente mais tarde.");
     const d = enrollmentSchema.parse({
       guardianName: str(fd, "guardianName"), email: str(fd, "email").toLowerCase(), phone: str(fd, "phone"), childName: str(fd, "childName"), message: str(fd, "message"),
     });
     if (!d.email && !d.phone) fail("Indique um email ou um telefone para a creche o poder contactar.");
     const birth = str(fd, "childBirthDate");
     if (birth && (!isIsoDate(birth) || birth > new Date().toISOString().slice(0, 10))) fail("Data de nascimento inválida.");
-    const db = await getTenantDb(inst!.id);
     await db.insert(t.enrollmentRequests).values({ ...d, childBirthDate: birth || null });
     await notify(db, await staffWithPermission(db, "children.manage"), {
       title: "Novo pedido de inscrição", body: `${d.childName} · pedido de ${d.guardianName}`, href: `/c/${inst!.slug}/gestao/inscricoes`,

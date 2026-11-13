@@ -148,13 +148,18 @@ export async function issueChildInvoiceAction(_p: S, fd: FormData): Promise<Acti
     const childId = str(fd, "childId"), period = str(fd, "period");
     if (!isPeriod(period)) fail("Mês inválido.");
     await assertChildAccess(ctx, childId);
-    const kid = await ctx.db.query.children.findFirst({ where: eq(t.children.id, childId), with: { feePlan: true } });
+    const kid = await ctx.db.query.children.findFirst({ where: eq(t.children.id, childId), with: { feePlan: true, inactivePeriods: true } });
     if (!kid) fail("Criança não encontrada.");
     const plan = kid.feePlan;
     if (kid.status !== "ACTIVE") fail("A criança está inativa. Reative-a na ficha antes de emitir a mensalidade.");
     if (!plan) fail("A criança não tem plano de mensalidade. Atribua um plano na ficha antes de emitir.");
     if (!plan.active) fail("O plano de mensalidade desta criança está desativado. Escolha outro plano na ficha.");
     if (kid.enrolledAt.slice(0, 7) > period) fail(`A criança só entrou em ${periodLabel(kid.enrolledAt.slice(0, 7))}. Não há mensalidade de um mês anterior à entrada.`);
+    const away = (kid.inactivePeriods ?? []).some((p) => {
+      const from = p.fromDate.slice(0, 7), to = (p.toDate ?? "9999-12").slice(0, 7);
+      return period > from && period < to;
+    });
+    if (away) fail(`A criança esteve desistente em ${periodLabel(period)}, por isso este mês não é faturável. Para emitir mesmo assim, feche o período de inatividade na ficha — ou use "Fatura avulsa" para um custo pontual desse mês.`);
     const existing = await ctx.db.query.invoices.findFirst({
       where: and(eq(t.invoices.childId, childId), eq(t.invoices.period, period), eq(t.invoices.kind, "MONTHLY"), isNull(t.invoices.voidedAt)),
     });

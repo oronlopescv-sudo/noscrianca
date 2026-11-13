@@ -9,6 +9,12 @@ import { audit, tenantAction, type TenantCtx } from "@/lib/tenant";
 
 type S = ActionResult | null;
 
+/** Dias úteis (segunda a sexta): uma creche fechada ao fim de semana não regista faltas lá. */
+function isWeekday(dateIso: string): boolean {
+  const dow = new Date(`${dateIso}T00:00:00Z`).getUTCDay();
+  return dow >= 1 && dow <= 5;
+}
+
 /** Um mês já pago não muda de faltas: o recibo deixaria de bater certo com o registo. */
 async function assertMonthsOpen(ctx: TenantCtx, employeeId: string, months: string[]) {
   const [paid] = await ctx.db.select({ period: t.salaryPayments.period }).from(t.salaryPayments)
@@ -28,7 +34,7 @@ export async function registerStaffAbsenceAction(_p: S, fd: FormData): Promise<A
     const to = str(fd, "endDate") || from;
     if (!isIsoDate(from) || !isIsoDate(to) || to < from) fail("Datas inválidas.");
     if (to > today) fail("Não é possível registar faltas em datas futuras.");
-    const days = dateRange(from, to);
+    const days = dateRange(from, to).filter(isWeekday); // as creches fecham ao fim de semana: uma baixa ao sábado não é falta
     if (days.length > 31) fail("Registe no máximo 31 dias de cada vez.");
     await assertMonthsOpen(ctx, emp!.id, [...new Set(days.map((d) => d.slice(0, 7)))]);
     const deductible = bool(fd, "deductible");

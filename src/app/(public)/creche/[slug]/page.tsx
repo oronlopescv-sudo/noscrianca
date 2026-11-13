@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { cache } from "react";
 import { asc, eq } from "drizzle-orm";
 import { CheckCircle2, Clock, Mail, MapPin, Phone } from "lucide-react";
 import { ActionForm, Submit } from "@/components/ui/client";
@@ -12,8 +13,9 @@ import { requestEnrollmentAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
-/** Dados públicos de uma instituição: nunca inclui crianças, famílias, equipa ou valores. */
-async function load(slug: string) {
+/** Dados públicos de uma instituição: nunca inclui crianças, famílias, equipa ou valores.
+ * cache() de React: metadata e render do MESMO request partilham uma só carga. */
+const load = cache(async (slug: string) => {
   const inst = await getInstitutionBySlug(slug);
   if (!inst || !institutionUsable(inst.status)) return null;
   const db = await getTenantDb(inst.id);
@@ -23,7 +25,7 @@ async function load(slug: string) {
     db.query.classrooms.findMany({ where: eq(t.classrooms.active, true), orderBy: [asc(t.classrooms.name)] }),
   ]);
   return { inst, s, photos, rooms };
-}
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const d = await load((await params).slug).catch(() => null);

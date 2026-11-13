@@ -7,7 +7,7 @@ async function authorized(ctx: TenantCtx, parts: string[], rel: string): Promise
   const [area, id, sub] = parts;
   if (area === "children" && id) {
     if (!(await canAccessChild(ctx, id))) return false;
-    if (sub === "docs") return !ctx.isGuardian && (ctx.can("documents.manage") || ctx.can("children.view"));
+    if (sub === "docs") return !ctx.isGuardian && ctx.can("documents.manage");
     return ctx.isGuardian || ctx.can("children.view");
   }
   if (area === "diary") {

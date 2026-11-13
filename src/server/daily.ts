@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { t } from "@/db/tenant";
 import type { DiaryType } from "@/db/tenant/schema";
@@ -58,8 +58,19 @@ export async function checkInAction(_p: S, fd: FormData): Promise<ActionResult> 
     if (prev?.checkInAt) fail(`${child.firstName} já tem entrada registada às ${fmtTime(prev.checkInAt, ctx.settings.timezone)}. Para corrigir, limpe a presença primeiro.`);
     const at = moment(date, str(fd, "time"), ctx);
     const values = { status: "PRESENT" as const, checkInAt: at, checkInBy: ctx.user.name, droppedBy: str(fd, "droppedBy").slice(0, 120), absenceReason: "" };
-    await ctx.db.insert(t.attendance).values({ childId: child.id, date, ...values })
-      .onConflictDoUpdate({ target: [t.attendance.childId, t.attendance.date], set: values });
+    // Atómico: só sobrescreve uma linha SEM entrada registada (uma falta ou
+    // corrida que a marcar entretanto não perde a escrita desta).
+    const made = await ctx.db.insert(t.attendance).values({ childId: child.id, date, ...values })
+      .onConflictDoNothing({ target: [t.attendance.childId, t.attendance.date] }).returning({ id: t.attendance.id });
+    if (!made.length) {
+      const [cur] = await ctx.db.update(t.attendance).set(values)
+        .where(and(eq(t.attendance.childId, child.id), eq(t.attendance.date, date), isNull(t.attendance.checkInAt)))
+        .returning({ id: t.attendance.id });
+      if (!cur) {
+        const row = await todayRow(ctx, child.id, date);
+        fail(`${child.firstName} já tem entrada registada às ${row ? fmtTime(row.checkInAt!, ctx.settings.timezone) : "—"}. Para corrigir, limpe a presença primeiro.`);
+      }
+    }
     return { ok: true, message: `Entrada de ${child.firstName} registada.` };
   });
 }
@@ -74,7 +85,15 @@ export async function checkOutAction(_p: S, fd: FormData): Promise<ActionResult>
     if (row.checkOutAt) fail(`${child.firstName} já tem saída registada às ${fmtTime(row.checkOutAt, ctx.settings.timezone)}. Para corrigir, limpe a presença primeiro.`);
     const at = moment(date, str(fd, "time"), ctx);
     if (at < row!.checkInAt!) fail("A saída não pode ser anterior à entrada.");
-    await ctx.db.update(t.attendance).set({ checkOutAt: at, checkOutBy: ctx.user.name, pickedBy: str(fd, "pickedBy").slice(0, 120) }).where(eq(t.attendance.id, row!.id));
+    // Atómico: só grava se ainda não houver saída (a primeira saída é a que fica).
+    const [written] = await ctx.db.update(t.attendance)
+      .set({ checkOutAt: at, checkOutBy: ctx.user.name, pickedBy: str(fd, "pickedBy").slice(0, 120) })
+      .where(and(eq(t.attendance.id, row!.id), isNull(t.attendance.checkOutAt)))
+      .returning({ id: t.attendance.id });
+    if (!written) {
+      const cur = await todayRow(ctx, child.id, date);
+      fail(cur?.checkOutAt ? `${child.firstName} já tem saída registada às ${fmtTime(cur.checkOutAt, ctx.settings.timezone)}.` : "O registo deste dia foi anulado entretanto.");
+    }
     return { ok: true, message: `Saída de ${child.firstName} registada.` };
   });
 }
@@ -87,8 +106,19 @@ export async function markAbsentAction(_p: S, fd: FormData): Promise<ActionResul
     const prev = await todayRow(ctx, child.id, date);
     if (prev?.checkInAt) fail(`${child.firstName} tem entrada registada às ${fmtTime(prev.checkInAt, ctx.settings.timezone)}. Limpe a presença antes de marcar falta.`);
     const values = { status: "ABSENT" as const, checkInAt: null, checkInBy: null, droppedBy: "", checkOutAt: null, checkOutBy: null, pickedBy: "", absenceReason: str(fd, "reason").slice(0, 200) };
-    await ctx.db.insert(t.attendance).values({ childId: child.id, date, ...values })
-      .onConflictDoUpdate({ target: [t.attendance.childId, t.attendance.date], set: values });
+    // Atómico: nunca marca falta sobre uma entrada que tenha sido registada
+    // entretanto (mesmo em corrida: a condição do UPDATE decide).
+    const made = await ctx.db.insert(t.attendance).values({ childId: child.id, date, ...values })
+      .onConflictDoNothing({ target: [t.attendance.childId, t.attendance.date] }).returning({ id: t.attendance.id });
+    if (!made.length) {
+      const [cur] = await ctx.db.update(t.attendance).set(values)
+        .where(and(eq(t.attendance.childId, child.id), eq(t.attendance.date, date), isNull(t.attendance.checkInAt)))
+        .returning({ id: t.attendance.id });
+      if (!cur) {
+        const row = await todayRow(ctx, child.id, date);
+        fail(`${child.firstName} tem entrada registada às ${row ? fmtTime(row.checkInAt!, ctx.settings.timezone) : "—"}. Limpe a presença antes de marcar falta.`);
+      }
+    }
     return { ok: true, message: `Falta de ${child.firstName} registada.` };
   });
 }
@@ -103,10 +133,16 @@ export async function clearAttendanceAction(_p: S, fd: FormData): Promise<Action
     const row = await ctx.db.query.attendance.findFirst({ where: and(eq(t.attendance.childId, childId), eq(t.attendance.date, date)) });
     if (!row) fail("Não existe registo para anular.");
     if (row!.checkOutAt && str(fd, "what") !== "all") {
-      await ctx.db.update(t.attendance).set({ checkOutAt: null, checkOutBy: null, pickedBy: "" }).where(eq(t.attendance.id, row!.id));
-      return { ok: true, message: "Saída anulada." };
+      // Atómico: só limpa a saída se ela ainda lá estiver.
+      const [done] = await ctx.db.update(t.attendance)
+        .set({ checkOutAt: null, checkOutBy: null, pickedBy: "" })
+        .where(and(eq(t.attendance.id, row!.id), isNotNull(t.attendance.checkOutAt)))
+        .returning({ id: t.attendance.id });
+      if (done) return { ok: true, message: "Saída anulada." };
+      fail("A saída já tinha sido anulada.");
     }
-    await ctx.db.delete(t.attendance).where(eq(t.attendance.id, row!.id));
+    const [gone] = await ctx.db.delete(t.attendance).where(eq(t.attendance.id, row!.id)).returning({ id: t.attendance.id });
+    if (!gone) fail("Não existe registo para anular.");
     return { ok: true, message: "Registo anulado." };
   });
 }

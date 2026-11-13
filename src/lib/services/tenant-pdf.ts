@@ -19,6 +19,15 @@ async function billTo(db: TenantDb, childId: string) {
   };
 }
 
+/** Linhas de documento no PDF: a lista pode crescer sem teto (faturas avulsas
+ * acrescentadas uma a uma), por isto limita e explica o corte. */
+function pdfItems(items: { description: string; amountCents: number }[], currency: string) {
+  const MAX = 80;
+  const lines = items.slice(0, MAX).map((i) => ({ description: i.description, amount: money(i.amountCents, currency) }));
+  if (items.length > MAX) lines.push({ description: `… e mais ${items.length - MAX} linha(s) (lista completa no painel)`, amount: money(items.slice(MAX).reduce((a, i) => a + i.amountCents, 0), currency) });
+  return lines;
+}
+
 export async function invoicePdf(db: TenantDb, s: Setting, invoiceId: string) {
   const inv = await db.query.invoices.findFirst({ where: eq(t.invoices.id, invoiceId), with: { items: true } });
   if (!inv) return null;
@@ -28,7 +37,7 @@ export async function invoicePdf(db: TenantDb, s: Setting, invoiceId: string) {
     kind: "FATURA", number: inv.number, accent: s.accentColor, issuer: issuer(s),
     recipient: { title: "Encarregado de educação", lines: to.lines },
     meta: [["Data de emissão", fmtDate(inv.issueDate)], ["Vencimento", fmtDate(inv.dueDate)], ["Referente a", inv.kind === "MONTHLY" ? periodLabel(inv.period) : "Fatura avulsa"]],
-    items: inv.items.map((i) => ({ description: i.description, amount: money(i.amountCents, s.currency) })),
+    items: pdfItems(inv.items, s.currency),
     totals: [["Total", money(inv.totalCents, s.currency)], ["Pago", money(inv.paidCents, s.currency)], ["Em dívida", money(Math.max(due, 0), s.currency)]],
     stamp: inv.status === "PAID" ? "PAGO" : inv.status === "VOID" ? "ANULADO" : undefined,
     note: inv.status === "VOID" ? `Anulada: ${inv.voidReason ?? ""}` : due > 0 && s.paymentInfo ? `Como pagar:\n${s.paymentInfo}` : inv.notes || undefined,
@@ -45,7 +54,7 @@ export async function receiptPdf(db: TenantDb, s: Setting, paymentId: string) {
     kind: "RECIBO", number: p.receipt.number, accent: s.accentColor, issuer: issuer(s),
     recipient: { title: "Recebemos de", lines: to.lines },
     meta: [["Data do pagamento", fmtDate(p.paidAt)], ["Emitido em", fmtDateObj(p.receipt.issuedAt, s.timezone)], ["Fatura", p.invoice.number], ["Método", METHOD_LABELS[p.method]]],
-    items: [{ description: `Pagamento da fatura ${p.invoice.number} — ${p.invoice.items.map((i) => i.description).join("; ")}`, amount: money(p.amountCents, s.currency) }],
+    items: [{ description: `Pagamento da fatura ${p.invoice.number} — ${p.invoice.items.map((i) => i.description).slice(0, 5).join("; ")}${p.invoice.items.length > 5 ? ` (…) +${p.invoice.items.length - 5}` : ""}`, amount: money(p.amountCents, s.currency) }],
     totals: [["Valor recebido", money(p.amountCents, s.currency)]],
     stamp: p.reversedAt ? "ANULADO" : "PAGO",
     note: [p.reference ? `Referência: ${p.reference}` : "", `Registado por ${p.recordedByName}.`, p.reversedAt ? `Estornado: ${p.reversalReason ?? ""}` : ""].filter(Boolean).join("\n"),

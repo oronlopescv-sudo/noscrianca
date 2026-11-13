@@ -5,6 +5,7 @@ import { and, eq, gt, lt, ne } from "drizzle-orm";
 import { central, c } from "@/db/central";
 import { randomToken, sha256 } from "./crypto";
 import { env } from "./env";
+import { clientIp } from "./request-ip";
 
 export const ADMIN_COOKIE = "nc_admin";
 export const TENANT_COOKIE = "nc_session";
@@ -20,13 +21,14 @@ export async function createSession(input: { scope: Scope; userId: string; insti
   const hours = input.scope === "PLATFORM" ? PLATFORM_TTL_H : input.impersonatorId ? 2 : TENANT_TTL_H;
   const expiresAt = new Date(Date.now() + hours * 3600_000);
   const h = await headers();
+  const ipFor = clientIp(h);
   await central().insert(c.sessions).values({
     tokenHash: sha256(token),
     scope: input.scope,
     userId: input.userId,
     institutionId: input.institutionId ?? null,
     impersonatorId: input.impersonatorId ?? null,
-    ip: (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || null,
+    ip: ipFor === "local" ? null : ipFor,
     userAgent: (h.get("user-agent") ?? "").slice(0, 300) || null,
     expiresAt,
   });

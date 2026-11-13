@@ -30,7 +30,9 @@ describe("reminderDue", () => {
     expect(reminderDue("2026-11-08", "2026-11-08", stages, 1)).toBe(false);
     expect(reminderDue("2026-11-08", "2026-11-20", stages, 14)).toBe(false);
   });
-  it("uma fatura muito antiga não gera avisos fora da janela", () => {
-    expect(reminderDue("2026-01-08", "2026-11-12", stages, 7)).toBe(false);
+  it("a última etapa fica ABERTA: fatura com muito atraso continua por avisar na última etapa (e só nela)", () => {
+    expect(reminderDue("2026-01-08", "2026-11-12", stages, 1)).toBe(false);
+    expect(reminderDue("2026-01-08", "2026-11-12", stages, 7)).toBe(true);
+    expect(reminderDue("2019-06-30", "2026-11-12", stages, 7)).toBe(true);
   });
 });

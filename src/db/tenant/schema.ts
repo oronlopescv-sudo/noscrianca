@@ -1,6 +1,6 @@
 // BD DE CADA INSTITUIÇÃO — uma base de dados PostgreSQL independente por creche.
 import { relations, sql } from "drizzle-orm";
-import { boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createId } from "@paralleldrive/cuid2";
 
 const id = () => text("id").primaryKey().$defaultFn(() => createId());
@@ -69,7 +69,7 @@ export const employees = pgTable("employees", {
   salaryCents: integer("salary_cents"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-});
+}, (t) => [check("employees_salary_ck", sql`${t.salaryCents} is null or ${t.salaryCents} > 0`)]);
 
 /** Salários pagos pela instituição a cada funcionário (um pagamento válido por mês). */
 export const salaryPayments = pgTable("salary_payments", {
@@ -85,7 +85,7 @@ export const salaryPayments = pgTable("salary_payments", {
   paidAt: text("paid_at").notNull(),
   method: paymentMethod("method").notNull(),
   notes: text("notes").notNull().default(""),
-  recordedById: text("recorded_by_id").notNull(),
+  recordedById: text("recorded_by_id").notNull().references(() => users.id, { onDelete: "restrict" }),
   recordedByName: text("recorded_by_name").notNull(),
   voidedAt: ts("voided_at"),
   voidedByName: text("voided_by_name"),
@@ -93,6 +93,9 @@ export const salaryPayments = pgTable("salary_payments", {
 }, (t) => [
   uniqueIndex("salary_employee_period_uq").on(t.employeeId, t.period).where(sql`${t.voidedAt} is null`),
   index("salary_period_idx").on(t.period),
+  check("salary_amount_ck", sql`${t.amountCents} >= 0`),
+  check("salary_base_ck", sql`${t.baseCents} is null or ${t.baseCents} >= 0`),
+  check("salary_absence_ck", sql`${t.absenceDiscountCents} >= 0 and ${t.absentDays} >= 0 and ${t.absenceDiscountCents} <= ${t.amountCents}`),
 ]);
 
 export const guardians = pgTable("guardians", {
@@ -233,7 +236,7 @@ export const invoices = pgTable("invoices", {
   voidReason: text("void_reason"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-}, (t) => [index("invoices_child_idx").on(t.childId), index("invoices_period_idx").on(t.period), index("invoices_status_idx").on(t.status)]);
+}, (t) => [index("invoices_child_idx").on(t.childId), index("invoices_period_idx").on(t.period), index("invoices_status_idx").on(t.status), uniqueIndex("invoices_child_period_uq").on(t.childId, t.period).where(sql`kind = 'MONTHLY' AND voided_at IS NULL`)]);
 
 export const invoiceItems = pgTable("invoice_items", {
   id: id(),
@@ -276,7 +279,7 @@ export const announcements = pgTable("announcements", {
   createdById: text("created_by_id").notNull(),
   createdByName: text("created_by_name").notNull(),
   createdAt: createdAt(),
-}, (t) => [index("announcements_created_idx").on(t.createdAt)]);
+}, (t) => [index("announcements_created_idx").on(t.createdAt), check("announcements_audience_ck", sql`${t.audience} in ('ALL', 'GUARDIANS', 'STAFF')`)]);
 
 export const messages = pgTable("messages", {
   id: id(),
@@ -346,7 +349,7 @@ export const enrollmentRequests = pgTable("enrollment_requests", {
   status: text("status").notNull().default("NEW"),
   handledByName: text("handled_by_name"),
   createdAt: createdAt(),
-}, (t) => [index("enrollment_status_idx").on(t.status)]);
+}, (t) => [index("enrollment_status_idx").on(t.status), check("enrollment_status_ck", sql`${t.status} in ('NEW', 'CONTACTED', 'CLOSED')`)]);
 
 /** Comprovativos de pagamento enviados pelos encarregados, à espera de confirmação. */
 export const paymentProofs = pgTable("payment_proofs", {
@@ -362,7 +365,7 @@ export const paymentProofs = pgTable("payment_proofs", {
   reviewNote: text("review_note").notNull().default(""),
   reviewedAt: ts("reviewed_at"),
   createdAt: createdAt(),
-}, (t) => [index("proofs_invoice_idx").on(t.invoiceId), index("proofs_status_idx").on(t.status)]);
+}, (t) => [index("proofs_invoice_idx").on(t.invoiceId), index("proofs_status_idx").on(t.status), check("proofs_status_ck", sql`${t.status} in ('PENDING', 'ACCEPTED', 'REJECTED')`)]);
 
 /** Agenda da instituição: eventos, reuniões, feriados e férias. */
 export const events = pgTable("events", {
@@ -376,7 +379,7 @@ export const events = pgTable("events", {
   audience: text("audience").notNull().default("ALL"),
   createdByName: text("created_by_name").notNull(),
   createdAt: createdAt(),
-}, (t) => [index("events_date_idx").on(t.date)]);
+}, (t) => [index("events_date_idx").on(t.date), check("events_audience_ck", sql`${t.audience} in ('ALL', 'GUARDIANS', 'STAFF')`)]);
 
 /** Férias e faltas da equipa, pedidas pelo funcionário e decididas pela direção. */
 export const staffLeaves = pgTable("staff_leaves", {
@@ -392,7 +395,12 @@ export const staffLeaves = pgTable("staff_leaves", {
   decidedByName: text("decided_by_name"),
   decidedAt: ts("decided_at"),
   createdAt: createdAt(),
-}, (t) => [index("leaves_employee_idx").on(t.employeeId), index("leaves_status_idx").on(t.status)]);
+}, (t) => [
+  index("leaves_employee_idx").on(t.employeeId),
+  index("leaves_status_idx").on(t.status),
+  check("leaves_type_ck", sql`${t.type} in ('VACATION', 'SICK', 'OTHER')`),
+  check("leaves_status_ck", sql`${t.status} in ('PENDING', 'APPROVED', 'REJECTED')`),
+]);
 
 /** Faltas da equipa registadas no calendário. As que "descontam" reduzem o salário do mês (1/30 por dia). */
 export const staffAbsences = pgTable("staff_absences", {
@@ -421,7 +429,7 @@ export const invoiceReminders = pgTable("invoice_reminders", {
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   email: text("email").notNull(),
   sentAt: ts("sent_at").notNull().defaultNow(),
-}, (t) => [uniqueIndex("reminders_unique_idx").on(t.invoiceId, t.stage, t.userId)]);
+}, (t) => [uniqueIndex("reminders_unique_idx").on(t.invoiceId, t.stage, t.userId), index("reminders_user_idx").on(t.userId), index("reminders_sent_idx").on(t.sentAt)]);
 
 export const auditLogs = pgTable("audit_logs", {
   id: id(),

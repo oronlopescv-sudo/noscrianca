@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { t, type TenantDb } from "@/db/tenant";
 
 /** Faltas de um intervalo de datas (ISO), com o funcionário e o respetivo utilizador. */
@@ -27,22 +27,26 @@ export function absencesInYear(db: TenantDb, employeeId: string, year: string) {
   return absencesInRange(db, `${year}-01-01`, `${year}-12-31`, [employeeId]);
 }
 
-/** Dias de falta que descontam do salário num mês (cada dia conta uma vez). */
+/** Dias de falta que descontam do salário num mês (cada dia conta uma vez; só dias úteis). */
 export async function countDeductibleAbsences(db: TenantDb, employeeId: string, period: string): Promise<number> {
   const [row] = await db.select({ n: count() }).from(t.staffAbsences).where(and(
     eq(t.staffAbsences.employeeId, employeeId),
     eq(t.staffAbsences.deductible, true),
     gte(t.staffAbsences.date, `${period}-01`),
     lte(t.staffAbsences.date, `${period}-31`),
+    // Segurança extra: uma linha antiga de fim de semana nunca desconta.
+    sql`extract(isodow from ${t.staffAbsences.date}::date) between 1 and 5`,
   ));
   return Number(row?.n ?? 0);
 }
 
-/** Dias de falta de um mês que descontam, agrupados por mês (YYYY-MM). */
+/** Dias de falta de um mês que descontam, agrupados por mês (YYYY-MM). Só dias úteis. */
 export function deductibleDaysByMonth(rows: { date: string; deductible: boolean }[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const r of rows) {
     if (!r.deductible) continue;
+    const dow = new Date(`${r.date}T00:00:00Z`).getUTCDay();
+    if (dow === 0 || dow === 6) continue; // fim de semana não desconta
     const m = r.date.slice(0, 7);
     out.set(m, (out.get(m) ?? 0) + 1);
   }

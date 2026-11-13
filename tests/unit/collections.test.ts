@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectionMessage, whatsappLink, whatsappNumber } from "@/lib/collection-rules";
+import { collectionMessage, whatsappNumber } from "@/lib/collection-rules";
 import { money } from "@/lib/format";
 
 const inv = (over: Partial<{ childName: string; overdue: boolean; owed: number }> = {}) => ({
@@ -14,10 +14,11 @@ describe("cobranças aos encarregados", () => {
     expect(whatsappNumber("12")).toBeNull();
   });
 
-  it("link de WhatsApp leva a mensagem já escrita (codificada)", () => {
-    const link = whatsappLink("+238 991 0200", "Olá, Rosa & família");
-    expect(link).toBe("https://wa.me/2389910200?text=Ol%C3%A1%2C%20Rosa%20%26%20fam%C3%ADlia");
-    expect(whatsappLink("", "x")).toBeNull();
+  it("o WhatsApp abre sem mensagem na URL: o texto fica no painel/copiado no teclado, nunca no link", () => {
+    // whatsappNumber só dá o número; o componente de cliente compõe a mensagem
+    // à parte (PII de crianças/dívidas não vai para o histórico como querystring).
+    expect(whatsappNumber("+238 991 0200")).toBe("2389910200");
+    expect(whatsappNumber("")).toBeNull();
   });
 
   it("mensagem: lista cada criança, o total e marca o atraso", () => {
