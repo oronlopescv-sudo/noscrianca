@@ -236,7 +236,10 @@ export const invoices = pgTable("invoices", {
   voidReason: text("void_reason"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-}, (t) => [index("invoices_child_idx").on(t.childId), index("invoices_period_idx").on(t.period), index("invoices_status_idx").on(t.status), uniqueIndex("invoices_child_period_uq").on(t.childId, t.period).where(sql`kind = 'MONTHLY' AND voided_at IS NULL`)]);
+}, (t) => [index("invoices_child_idx").on(t.childId), index("invoices_period_idx").on(t.period), index("invoices_status_idx").on(t.status), uniqueIndex("invoices_child_period_uq").on(t.childId, t.period).where(sql`kind = 'MONTHLY' AND voided_at IS NULL`),
+  check("invoices_paid_ck", sql`${t.paidCents} >= 0 and ${t.paidCents} <= ${t.totalCents}`),
+  check("invoices_void_ck", sql`(${t.status} = 'VOID') = (${t.voidedAt} is not null)`),
+]);
 
 export const invoiceItems = pgTable("invoice_items", {
   id: id(),

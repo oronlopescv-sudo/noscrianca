@@ -56,7 +56,7 @@ async function novaFatura(diasEmAtraso: number, status: "OPEN" | "PAID" = "OPEN"
   const num = `TST-${diasEmAtraso}-${status}-${anulada ? "V" : "N"}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const [inv] = await db.insert(t.invoices).values({
     number: num, childId: link!.childId, kind: "EXTRA", period: "2031-03", issueDate: addDays(today, -20),
-    dueDate: addDays(today, -diasEmAtraso), totalCents: 100000, paidCents: status === "PAID" ? 100000 : 0, status,
+    dueDate: addDays(today, -diasEmAtraso), totalCents: 100000, paidCents: status === "PAID" ? 100000 : 0, status: anulada ? "VOID" : status,
     notes: "teste de avisos", voidedAt: anulada ? new Date() : null, voidReason: anulada ? "teste" : null,
   }).returning();
   extras.push(inv.id);
