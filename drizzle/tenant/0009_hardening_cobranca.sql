@@ -9,6 +9,6 @@ ALTER TABLE "events" ADD CONSTRAINT "events_audience_ck" CHECK ("events"."audien
 ALTER TABLE "payment_proofs" ADD CONSTRAINT "proofs_status_ck" CHECK ("payment_proofs"."status" in ('PENDING', 'ACCEPTED', 'REJECTED'));--> statement-breakpoint
 ALTER TABLE "salary_payments" ADD CONSTRAINT "salary_amount_ck" CHECK ("salary_payments"."amount_cents" >= 0);--> statement-breakpoint
 ALTER TABLE "salary_payments" ADD CONSTRAINT "salary_base_ck" CHECK ("salary_payments"."base_cents" is null or "salary_payments"."base_cents" >= 0);--> statement-breakpoint
-ALTER TABLE "salary_payments" ADD CONSTRAINT "salary_absence_ck" CHECK ("salary_payments"."absence_discount_cents" >= 0 and "salary_payments"."absent_days" >= 0 and "salary_payments"."absence_discount_cents" <= "salary_payments"."amount_cents");--> statement-breakpoint
+ALTER TABLE "salary_payments" ADD CONSTRAINT "salary_absence_ck" CHECK ("salary_payments"."absence_discount_cents" >= 0 and "salary_payments"."absent_days" >= 0 and "salary_payments"."absence_discount_cents" <= coalesce("salary_payments"."base_cents", "salary_payments"."amount_cents"));--> statement-breakpoint
 ALTER TABLE "staff_leaves" ADD CONSTRAINT "leaves_type_ck" CHECK ("staff_leaves"."type" in ('VACATION', 'SICK', 'OTHER'));--> statement-breakpoint
 ALTER TABLE "staff_leaves" ADD CONSTRAINT "leaves_status_ck" CHECK ("staff_leaves"."status" in ('PENDING', 'APPROVED', 'REJECTED'));

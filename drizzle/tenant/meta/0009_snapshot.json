@@ -2980,7 +2980,7 @@
         },
         "salary_absence_ck": {
           "name": "salary_absence_ck",
-          "value": "\"salary_payments\".\"absence_discount_cents\" >= 0 and \"salary_payments\".\"absent_days\" >= 0 and \"salary_payments\".\"absence_discount_cents\" <= \"salary_payments\".\"amount_cents\""
+          "value": "\"salary_payments\".\"absence_discount_cents\" >= 0 and \"salary_payments\".\"absent_days\" >= 0 and \"salary_payments\".\"absence_discount_cents\" <= coalesce(\"salary_payments\".\"base_cents\", \"salary_payments\".\"amount_cents\")"
         }
       },
       "isRLSEnabled": false
