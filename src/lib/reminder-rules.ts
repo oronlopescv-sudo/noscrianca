@@ -16,15 +16,15 @@ export function daysBetween(fromIso: string, toIso: string): number {
 
 /**
  * Uma etapa aplica-se a uma fatura quando o atraso está dentro da sua janela:
- * de `stage` dias até à etapa seguinte (ou +6 dias, na última). Assim, se o
- * sistema esteve parado, a etapa é recuperada nos dias seguintes, mas faturas
- * antigas anteriores à ativação não geram uma vaga de avisos.
+ * de `stage` dias até à etapa seguinte (a última fica ABERTA — uma fatura com
+ * muito atraso continua por avisar, nunca é ignorada). O índice único
+ * (fatura, etapa, encarregado) impede a repetição do aviso.
  */
 export function reminderDue(dueDate: string, today: string, stages: number[], stage: number): boolean {
   const overdue = daysBetween(dueDate, today);
   const idx = stages.indexOf(stage);
   if (idx === -1) return false;
   const next = stages[idx + 1];
-  const windowEnd = next ? next - 1 : stage + 6;
+  const windowEnd = next ? next - 1 : Infinity;
   return overdue >= stage && overdue <= windowEnd;
 }

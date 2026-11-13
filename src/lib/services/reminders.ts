@@ -5,11 +5,13 @@ import { mailConfigured, sendMail } from "@/lib/mail";
 import { DEFAULT_REMINDER_DAYS, daysBetween, parseReminderDays, reminderDue } from "@/lib/reminder-rules";
 
 type Inst = { id: string; slug: string; timezone: string };
+type GuardianRef = { userId: string; email: string; name: string };
 
 /**
  * Envia avisos de faturas em atraso aos encarregados de cada criança.
  * Idempotente: o registo (fatura, etapa, utilizador) é inserido antes do envio,
  * e removido se o envio falhar, para tentar de novo no dia seguinte.
+ * Encarregados: só contas ACTIVE com email (igual à cobrança manual).
  */
 export async function sendOverdueReminders(inst: Inst): Promise<{ sent: number; failed: number }> {
   const result = { sent: 0, failed: 0 };
@@ -26,15 +28,33 @@ export async function sendOverdueReminders(inst: Inst): Promise<{ sent: number; 
     isNull(t.invoices.voidedAt),
     lt(t.invoices.dueDate, today),
   ));
+  if (!overdue.length) return result;
+
+  // Tudo em lote antes do loop: crianças umas e encarregados outras (sem N+1).
+  const childIds = [...new Set(overdue.map((i) => i.childId))];
+  const kids = await db.query.children.findMany({ where: inArray(t.children.id, childIds) });
+  const kidsById = new Map(kids.map((k) => [k.id, k]));
+  const links = await db
+    .select({ childId: t.childGuardians.childId, userId: t.users.id, email: t.users.email, name: t.users.name, status: t.users.status, deletedAt: t.users.deletedAt })
+    .from(t.childGuardians)
+    .innerJoin(t.guardians, eq(t.guardians.id, t.childGuardians.guardianId))
+    .innerJoin(t.users, eq(t.users.id, t.guardians.userId))
+    .where(inArray(t.childGuardians.childId, childIds));
+  const guardiansByChild = new Map<string, GuardianRef[]>();
+  for (const l of links) {
+    if (l.status !== "ACTIVE" || l.deletedAt || !l.email) continue;
+    const arr = guardiansByChild.get(l.childId) ?? [];
+    if (!arr.some((g) => g.userId === l.userId)) arr.push({ userId: l.userId, email: l.email, name: l.name });
+    guardiansByChild.set(l.childId, arr);
+  }
 
   for (const inv of overdue) {
     const stage = stages.find((st) => reminderDue(inv.dueDate, today, stages, st));
     if (stage === undefined) continue;
-    const recipients = await guardiansOfChild(db, inv.childId);
-    const child = await db.query.children.findFirst({ where: eq(t.children.id, inv.childId) });
+    const child = kidsById.get(inv.childId);
     if (!child) continue;
 
-    for (const g of recipients) {
+    for (const g of guardiansByChild.get(inv.childId) ?? []) {
       const [row] = await db.insert(t.invoiceReminders)
         .values({ invoiceId: inv.id, stage, userId: g.userId, email: g.email })
         .onConflictDoNothing().returning();
@@ -74,15 +94,5 @@ export async function sendOverdueReminders(inst: Inst): Promise<{ sent: number; 
     }
   }
   return result;
-}
-
-async function guardiansOfChild(db: TenantDb, childId: string) {
-  const rows = await db
-    .select({ userId: t.users.id, email: t.users.email, name: t.users.name, status: t.users.status, deletedAt: t.users.deletedAt })
-    .from(t.childGuardians)
-    .innerJoin(t.guardians, eq(t.guardians.id, t.childGuardians.guardianId))
-    .innerJoin(t.users, eq(t.users.id, t.guardians.userId))
-    .where(eq(t.childGuardians.childId, childId));
-  return rows.filter((r) => r.status !== "SUSPENDED" && !r.deletedAt && r.email);
 }
 

@@ -1,6 +1,5 @@
 "use server";
 
-import { after } from "next/server";
 import { t } from "@/db/tenant";
 import { COOLDOWN_DAYS, MANUAL_STAGE, collectionMessage } from "@/lib/collection-rules";
 import { money, todayIn } from "@/lib/format";
@@ -56,7 +55,9 @@ export async function sendGuardianCollectionAction(_p: S, fd: FormData): Promise
   });
 }
 
-/** Cobrança a todos os encarregados com mensalidades em atraso: um aviso por encarregado, sem repetir os recentes. */
+/** Cobrança a todos os encarregados com mensalidades em atraso: um aviso por encarregado, sem repetir os recentes.
+ * Os emails vão SÍNCRONA e só o canal efetivamente entregue é registado como aviso (o último
+ * aviso alimenta o cooldown — nunca se perde um encarregado por um email que falhou). */
 export async function sendOverdueCollectionsAction(_p: S, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     const ctx = await tenantAction(str(fd, "slug"), { permission: "finance.manage" });
@@ -72,28 +73,31 @@ export async function sendOverdueCollectionsAction(_p: S, fd: FormData): Promise
     if (!reachable.length) fail("Nenhum encarregado em atraso tem conta ativa nem email configurado para receber a cobrança. Use o WhatsApp.");
 
     const replyTo = ctx.settings.email || undefined;
-    const outbox: { to: string; subject: string; text: string }[] = [];
-    let inApp = 0;
+    let inApp = 0, emailedCount = 0, noDelivery = 0;
     for (const g of reachable) {
       const msg = messageFor(ctx, g);
+      const emailed = mailOn && !!g.email ? await sendMail({ to: g.email, replyTo, subject: msg.subject, text: msg.text }) : false;
+      let delivered = false;
       if (g.accountActive) {
         await notify(ctx.db, [g.userId], { title: msg.subject, body: `Em falta: ${money(g.owed, ctx.settings.currency)}`, href: `${ctx.base}/pais/financeiro` });
         inApp++;
+        delivered = true;
       }
-      if (mailOn && g.email) outbox.push({ to: g.email, subject: msg.subject, text: msg.text });
-      await recordManual(ctx, g);
-    }
-    if (outbox.length) {
-      after(async () => {
-        for (const m of outbox) await sendMail({ ...m, replyTo });
-      });
+      if (emailed) emailedCount++;
+      if (emailed) delivered = true;
+      // Só quem recebeu por algum canal entra no cooldown; um email falhado
+      // será tentado de novo na próxima cobrança em lote.
+      if (delivered) await recordManual(ctx, g);
+      else noDelivery++;
     }
     await audit(ctx, "Cobrança em lote a encarregados", {
-      entity: "invoice", details: { encarregados: reachable.length, avisosNaAplicacao: inApp, emails: outbox.length, semCanal: noChannel, jaAvisados: skipped },
+      entity: "invoice",
+      details: { encarregados: reachable.length, avisosNaAplicacao: inApp, emails: emailedCount, semEmailEntregue: noDelivery, semCanal: noChannel, jaAvisados: skipped },
     });
     const bits = [
+      emailedCount ? `${emailedCount} email(s) enviados` : "",
       inApp ? `${inApp} avisado(s) na aplicação` : "",
-      outbox.length ? `${outbox.length} email(s) a enviar` : "",
+      noDelivery ? `${noDelivery} sem entrega (verifique o email e use o WhatsApp)` : "",
       noChannel ? `${noChannel} sem email nem conta ativa (use o WhatsApp)` : "",
       skipped ? `${skipped} ignorado(s): avisado(s) há menos de ${COOLDOWN_DAYS} dias` : "",
     ].filter(Boolean);

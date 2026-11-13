@@ -6,10 +6,11 @@ export function dailyRateCents(baseCents: number): number {
   return Math.round(baseCents / DAILY_DIVISOR);
 }
 
-/** Desconto total por faltas, em cêntimos. Nunca ultrapassa o salário base. */
+/** Desconto total por faltas, em cêntimos. Nunca ultrapassa o salário base.
+ * Usa dias × valor-do-dia, para o total bater certo com a linha "1 dia = X" do recibo. */
 export function absenceDiscountCents(baseCents: number, days: number): number {
   if (baseCents <= 0 || days <= 0) return 0;
-  return Math.min(baseCents, Math.round((baseCents * days) / DAILY_DIVISOR));
+  return Math.min(baseCents, days * dailyRateCents(baseCents));
 }
 
 /**

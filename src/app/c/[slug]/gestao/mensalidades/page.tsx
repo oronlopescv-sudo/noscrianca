@@ -2,9 +2,10 @@ import Link from "next/link";
 import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { ActionForm, ConfirmAction, CopyField, Modal, Submit } from "@/components/ui/client";
+import { WhatsappButton } from "@/components/tenant/whatsapp";
 import { Badge, Card, EmptyState, Field, Notice, PageHeader } from "@/components/ui/kit";
 import { fmtDateObj, money, periodLabel, todayIn, centsToInput } from "@/lib/format";
-import { COOLDOWN_DAYS, collectionMessage, whatsappLink } from "@/lib/collection-rules";
+import { COOLDOWN_DAYS, collectionMessage } from "@/lib/collection-rules";
 import { mailConfigured } from "@/lib/mail";
 import { guardianDebts } from "@/lib/services/collections";
 import { INVOICE_STATUS, CYCLE_LABEL } from "@/lib/labels";
@@ -200,7 +201,6 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
           <ul className="divide-y divide-line">
             {debts.map((g) => {
               const msg = collectionMessage({ schoolName: ctx.settings.name, guardianName: g.name, invoices: g.invoices, owed: g.owed, currency: cur, paymentInfo: ctx.settings.paymentInfo });
-              const wa = g.phone ? whatsappLink(g.phone, msg.short) : null;
               const kids = [...new Set(g.invoices.map((i) => i.childName.split(" ")[0]))].join(", ");
               return (
                 <li key={g.userId} className="space-y-2.5 px-4 py-3.5 sm:px-5">
@@ -222,7 +222,7 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
                         text={`Recebe uma mensagem com ${g.invoices.length} mensalidade(s) em aberto (${money(g.owed, cur)}), ${mailOk && g.email ? "por email e " : ""}como aviso na aplicação${g.accountActive ? "" : " (ainda não tem conta ativa, por isso só recebe o email, se existir)"}.`}
                         confirmLabel="Enviar" />
                     )}
-                    {wa ? <a href={wa} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">WhatsApp</a> : <span className="self-center text-xs text-ink-soft">Sem telefone</span>}
+                    {g.phone ? <WhatsappButton phone={g.phone} text={msg.short} /> : <span className="self-center text-xs text-ink-soft">Sem telefone</span>}
                     <Modal title={`Mensagem para ${g.name}`} trigger="Copiar mensagem" triggerClass="btn-ghost btn-sm">
                       <p className="mb-3 text-sm text-ink-soft">Copie e cole no WhatsApp, SMS ou email.</p>
                       <CopyField value={msg.text} label="Mensagem completa" />

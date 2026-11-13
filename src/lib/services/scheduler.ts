@@ -4,6 +4,7 @@ import { getTenantDb } from "@/db/tenant";
 import { todayIn } from "@/lib/format";
 import { bootstrapCentral } from "./bootstrap";
 import { generateMonthlyInvoices } from "./finance";
+import { anonymizeOldEnrollments } from "./retention";
 import { sendOverdueReminders } from "./reminders";
 import { backupInstitution, liveInstitutions, pruneBackups, refreshStats } from "./ops";
 import { runBillingCycle } from "./platform-billing";
@@ -47,6 +48,9 @@ async function runInstitutionDailyTasks(instId: string, slug: string, timezone: 
       // Avisos automáticos de faturas em atraso (email e notificação no portal).
       const r = await sendOverdueReminders({ id: instId, slug, timezone });
       if (r.sent || r.failed) console.log(`[avisos] ${slug}: ${r.sent} enviados, ${r.failed} falhados`);
+      // Retenção: pedidos de inscrição antigos passam a anónimos (sem PII).
+      const pruned = await anonymizeOldEnrollments(await getTenantDb(instId));
+      if (pruned) console.log(`[retenção] ${slug}: ${pruned} pedido(s) de inscrição anonimizado(s)`);
     }
     await refreshStats(instId);
     await backupInstitution(instId, false);

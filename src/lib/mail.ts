@@ -42,9 +42,10 @@ export async function sendMail(mail: Mail): Promise<boolean> {
   }
   const host = process.env.SMTP_HOST;
   if (!host) {
-    // Nunca registamos o conteúdo: os textos contêm links de convite/reset com
-    // token de uso único. Os links ficam disponíveis no painel correspondente.
-    console.log(`[mail:não configurado] Para: ${mail.to} | Assunto: ${mail.subject} | conteúdo omitido`);
+    // Nunca registamos destinatário nem conteúdo: os textos falam de crianças
+    // (assunto) e contêm links com token de uso único. O painel correspondente
+    // mostra sempre a mensagem pendente.
+    console.log("[mail:não configurado] envio ignorado — sem SMTP/Resend no servidor (conteúdo e destinatário omitidos).");
     return false;
   }
   try {
