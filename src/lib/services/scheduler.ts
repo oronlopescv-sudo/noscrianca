@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { eq, lt } from "drizzle-orm";
 import { central, c } from "@/db/central";
 import { getTenantDb } from "@/db/tenant";
@@ -6,9 +8,9 @@ import { bootstrapCentral } from "./bootstrap";
 import { generateMonthlyInvoices } from "./finance";
 import { anonymizeOldEnrollments } from "./retention";
 import { sendOverdueReminders } from "./reminders";
-import { backupCentral, backupInstitution, liveInstitutions, pruneBackups, refreshStats } from "./ops";
+import { backupCentral, backupInstitution, liveInstitutions, migrateAllTenants, pruneBackups, refreshStats } from "./ops";
 import { runBillingCycle } from "./platform-billing";
-import { resumePendingJobs } from "./provisioning";
+import { hardenTenantIsolation, resumePendingJobs } from "./provisioning";
 
 const g = globalThis as unknown as { __ncScheduler?: boolean; __ncTick?: boolean; __ncOnceFails?: Map<string, number> };
 const MAX_RETRIES = 10;
@@ -64,10 +66,37 @@ async function runInstitutionDailyTasks(instId: string, slug: string, timezone: 
   }
 }
 
+/**
+ * Selo do estado das migrações empacotadas (central + tenant): muda sempre que
+ * um deploy traz migrações novas, e só nesses casos vale uma re-execução.
+ * O servidor standalone tem `./drizzle` na raiz da aplicação (Dockerfile).
+ */
+async function migrationsStamp(): Promise<string> {
+  const last = async (f: string): Promise<string> => {
+    const j = JSON.parse(await readFile(path.join(process.cwd(), "drizzle", f), "utf8")) as { entries: { when: number }[] };
+    return String(j.entries?.at(-1)?.when ?? 0);
+  };
+  return `${await last(path.join("central", "meta", "_journal.json"))}-${await last(path.join("tenant", "meta", "_journal.json"))}`;
+}
+
+/** Aplica as migrações a todas as instituições ativas e endurece o isolamento. */
+async function migrateTenantsAtBoot() {
+  const report = await migrateAllTenants();
+  for (const r of report) console.log(`[arranque] migrações ${r.slug}: ${r.ok ? "aplicadas" : `FALHARAM — ${r.error}`}`);
+  const falharam = report.filter((r) => !r.ok);
+  if (falharam.length) throw new Error(`migrações falharam em: ${falharam.map((f) => f.slug).join(", ")}`);
+  const n = await hardenTenantIsolation();
+  console.log(`[arranque] migrações de instituições ao dia; isolamento verificado em ${n} base(s).`);
+}
+
 async function tick() {
   if (g.__ncTick) return;
   g.__ncTick = true;
   try {
+    // As migrações de tenant correm no próprio arranque (a central é preparada
+    // antes, em startScheduler): cada deploy atualiza a base de todas as
+    // instituições sem passo manual. Se falhar, a tarefa re-tenta no seguinte.
+    await once(`arranque-migracoes:${await migrationsStamp()}`, migrateTenantsAtBoot);
     await resumePendingJobs();
     await once(`daily-geral:${new Date().toISOString().slice(0, 10)}`, runGlobalDailyTasks);
     // Cada instituição tem o seu próprio dia: as tarefas correm quando o dia

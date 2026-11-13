@@ -15,6 +15,9 @@ import { hardenTenantIsolation } from "@/lib/services/provisioning";
  *   npm run tenants:central-backup           cópia da base central (plataforma)
  *   npm run tenants:central-list             lista as cópias da central no servidor
  *   npm run tenants:central-restore -- <f>   repõe a central a partir de um ficheiro (site PARADO!)
+ *
+ * Na imagem Docker (produção) a CLI via npm não existe: os mesmos comandos correm com
+ * `docker exec <app> node ops.js …` (a CLI vem empacotada no arranque da imagem).
  */
 async function main() {
   const [cmd, slug, extra] = process.argv.slice(2);
@@ -37,13 +40,13 @@ async function main() {
     return;
   }
   if (cmd === "central-restore") {
-    if (!slug) throw new Error("Indique o ficheiro de cópia: npm run tenants:central-restore -- <nome-do-ficheiro> (veja com tenants:central-list)");
+    if (!slug) throw new Error("Indique o ficheiro de cópia: central-restore <nome-do-ficheiro> (veja a lista com central-list)");
     await restoreCentralBackup(slug);
     console.log("Central restaurada. Inicie o site de novo e verifique o login do admin.");
     return;
   }
   if (cmd === "backup" || cmd === "restore") {
-    if (!slug) throw new Error(`Indique o endereço da instituição: npm run tenants:${cmd} -- <slug>`);
+    if (!slug) throw new Error(`Indique o endereço da instituição: ${cmd} <slug>`);
     const inst = await central().query.institutions.findFirst({ where: eq(c.institutions.slug, slug) });
     if (!inst) throw new Error(`Instituição "${slug}" não encontrada.`);
     if (cmd === "backup") {
@@ -56,7 +59,8 @@ async function main() {
     }
     return;
   }
-  console.log("Uso: tenants.ts migrate | backup <slug> | restore <slug> <backupId> | central-backup | central-list | central-restore <ficheiro>");
+  console.log("Uso: migrate | backup <slug> | restore <slug> <id-da-cópia> | central-backup | central-list | central-restore <ficheiro>");
+  console.log("(em desenvolvimento via npm run tenants:…; na imagem Docker via docker exec <app> node ops.js …)");
   process.exitCode = 1;
 }
 
