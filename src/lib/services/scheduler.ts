@@ -6,7 +6,7 @@ import { bootstrapCentral } from "./bootstrap";
 import { generateMonthlyInvoices } from "./finance";
 import { anonymizeOldEnrollments } from "./retention";
 import { sendOverdueReminders } from "./reminders";
-import { backupInstitution, liveInstitutions, pruneBackups, refreshStats } from "./ops";
+import { backupCentral, backupInstitution, liveInstitutions, pruneBackups, refreshStats } from "./ops";
 import { runBillingCycle } from "./platform-billing";
 import { resumePendingJobs } from "./provisioning";
 
@@ -37,6 +37,10 @@ async function once(key: string, fn: () => Promise<void>) {
 async function runGlobalDailyTasks() {
   await runBillingCycle();
   await central().delete(c.sessions).where(lt(c.sessions.expiresAt, new Date()));
+  // A central também se copia todos os dias: é a base que guarda as contas de
+  // acesso e as instituições — sem ela as cópias das instituições não chegam.
+  const cb = await backupCentral();
+  console.log(`[backup] central: ${cb.fileName} (${Math.ceil(cb.sizeBytes / 1024)} KB)`);
 }
 
 /** Tarefas de cada instituição, à meia-noite LOCAL de cada uma. */

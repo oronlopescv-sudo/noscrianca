@@ -267,8 +267,18 @@ async function Invoices({ institutionId, canIssue }: { institutionId: string; ca
 async function Backups({ institutionId, slug, live, lastBackupAt }: { institutionId: string; slug: string; live: boolean; lastBackupAt: Date | null }) {
   const rows = await central().query.backupRecords.findMany({ where: eq(c.backupRecords.institutionId, institutionId), orderBy: desc(c.backupRecords.createdAt), limit: 40 });
   return (
-    <Card title="Backups independentes desta instituição" pad={false} actions={live ? <ActionButton action={backupNowAction} hidden={{ institutionId }} className="btn-primary btn-sm">Fazer backup agora</ActionButton> : undefined}>
-      <p className="border-b border-line px-5 py-3 text-xs text-ink-soft">Backup automático diário · retenção de {env.backupRetentionDays} dias (os manuais são mantidos) · último: {fmtDateTime(lastBackupAt)}</p>
+    <Card title="Backups independentes desta instituição" pad={false} actions={live ? <>
+      <Modal trigger="Carregar cópia" triggerClass="btn-ghost btn-sm" title="Carregar ficheiro de cópia">
+        <form method="post" action="/admin/backups/carregar" encType="multipart/form-data">
+          <input type="hidden" name="institutionId" value={institutionId} />
+          <p className="mb-3 text-sm text-ink-soft">Suba um ficheiro .dump descarregado antes — útil para repor dados num servidor novo. O ficheiro é validado com o pg_restore e fica disponível para restaurar aqui mesmo.</p>
+          <input type="file" name="ficheiro" accept=".dump,.backup" required className="input" autoComplete="off" />
+          <div className="mt-4 flex justify-end gap-2"><button type="submit" className="btn-primary">Subir e validar</button></div>
+        </form>
+      </Modal>
+      <ActionButton action={backupNowAction} hidden={{ institutionId }} className="btn-primary btn-sm">Fazer backup agora</ActionButton>
+    </> : undefined}>
+      <p className="border-b border-line px-5 py-3 text-xs text-ink-soft">Backup automático diário · retenção de {env.backupRetentionDays} dias (os manuais são mantidos) · último: {fmtDateTime(lastBackupAt)} · descarregue cópias para fora do servidor para poder recuperá-las num servidor novo.</p>
       {rows.length === 0 ? <EmptyState title="Ainda não há backups" text="O primeiro backup automático é feito no próximo ciclo diário." /> : (
         <div className="table-wrap">
           <table className="table">
@@ -282,6 +292,7 @@ async function Backups({ institutionId, slug, live, lastBackupAt }: { institutio
                   <td className="whitespace-nowrap">{b.sizeBytes ? bytes(b.sizeBytes) : "—"}</td>
                   <td>{b.status === "DONE" ? <Badge tone="green">Concluído</Badge> : b.status === "FAILED" ? <span title={b.error ?? ""}><Badge tone="red">Falhou</Badge></span> : <Badge tone="blue">Em curso</Badge>}</td>
                   <td className="text-right">
+                    {b.status === "DONE" && <a className="btn-ghost btn-sm mr-2 inline-block" href={`/admin/backups/descarregar/${b.id}`}>Descarregar</a>}
                     {b.status === "DONE" && live && (
                       <ConfirmAction action={restoreBackupAction} hidden={{ institutionId, backupId: b.id }} label="Restaurar" danger title="Restaurar este backup" confirmLabel="Restaurar"
                         text={`A base de dados desta instituição volta ao estado de ${fmtDateTime(b.createdAt)}. Tudo o que foi registado depois será perdido. Recomenda-se fazer um backup antes.`}>

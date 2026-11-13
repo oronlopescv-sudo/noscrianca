@@ -1,10 +1,14 @@
 import { spawn } from "node:child_process";
+import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
 import { and, count, eq, inArray, isNull, lt } from "drizzle-orm";
-import { central, centralPool, c } from "@/db/central";
+import { central, centralPool, closeCentral, c } from "@/db/central";
 import { migrateTenant } from "@/db/migrate";
 import { dropTenantPool, getTenantDb, t, tenantConnectionString } from "@/db/tenant";
+import { isPgDumpExtension, isPgDumpHeader, sanitizeBackupName } from "@/lib/backup-file";
 import { env } from "@/lib/env";
 
 function runTool(cmd: string, args: string[], url: string): Promise<void> {
@@ -24,8 +28,148 @@ function runTool(cmd: string, args: string[], url: string): Promise<void> {
   });
 }
 
-function backupFolder(slug: string) {
+export function backupFolder(slug: string) {
   return path.resolve(env.backupDir, slug);
+}
+
+function platformFolder() {
+  return backupFolder("platform");
+}
+
+// ---------------------------------------------------------------------------
+// Cópias da base central (plataforma): contas de acesso, instituições, planos,
+// faturas do SaaS e o registo das cópias. Sem ela, perder o servidor perde
+// também o acesso — as cópias das instituições sozinhas não chegam.
+// ---------------------------------------------------------------------------
+
+export type CentralBackupInfo = { fileName: string; sizeBytes: number; createdAt: Date };
+
+/** Cópia de segurança da base central (pg_dump, formato custom). */
+export async function backupCentral() {
+  const folder = platformFolder();
+  await mkdir(folder, { recursive: true });
+  const fileName = `central-${new Date().toISOString().replace(/[:.]/g, "-")}.dump`;
+  const full = path.join(folder, fileName);
+  await runTool("pg_dump", ["--format=custom", "--no-owner", "--no-privileges", `--file=${full}`], env.centralUrl);
+  const size = (await stat(full)).size;
+  return { fileName, sizeBytes: size, createdAt: new Date() };
+}
+
+export async function listCentralBackups(): Promise<CentralBackupInfo[]> {
+  const folder = platformFolder();
+  const names = await readdir(folder).catch(() => [] as string[]);
+  const out: CentralBackupInfo[] = [];
+  for (const name of names) {
+    const st = await stat(path.join(folder, name)).catch(() => null);
+    if (st?.isFile()) out.push({ fileName: name, sizeBytes: st.size, createdAt: st.mtime });
+  }
+  return out.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+/** Caminho de um ficheiro de cópia da central, já com o nome limpo. */
+export function centralBackupPath(fileName: string): string {
+  return path.join(platformFolder(), sanitizeBackupName(fileName));
+}
+
+/**
+ * Restaura a base central a partir de um ficheiro de cópia (pg_restore --clean).
+ * DESTROI o conteúdo atual da central: corre só por comando, com o site parado
+ * (o resto do fluxo de perda total está na secção "Recuperação" do README).
+ */
+export async function restoreCentralBackup(fileName: string) {
+  const full = centralBackupPath(fileName);
+  await stat(full).catch(() => { throw new Error("O ficheiro de cópia não existe no servidor."); });
+  // Fecha a ligação da central (se houver) para o pg_restore não disputar locks.
+  await closeCentral();
+  const u = new URL(env.centralUrl);
+  await runTool("pg_restore", [
+    "--clean", "--if-exists", "--no-owner", "--no-privileges", "--single-transaction",
+    `--dbname=${u.pathname.slice(1)}`,
+    full,
+  ], env.centralUrl);
+}
+
+// ---------------------------------------------------------------------------
+// Subidas (upload) de cópias: o admin traz de volta um .dump descarregado
+// antes, para restaurar num servidor novo.
+// ---------------------------------------------------------------------------
+
+export const backupUploadMaxBytes = Number(process.env.BACKUP_UPLOAD_MAX_MB || 256) * 1_000_000;
+
+/**
+ * Guarda no servidor uma cópia subida pelo admin: valida o formato pg_dump
+ * (cabecalho PGDMP + tabela legível), escreve com limite de tamanho e remove
+ * o ficheiro se algo falhar. Devolve o nome usado no disco.
+ */
+export async function savePgDumpUpload(folder: string, originalName: string, body: ReadableStream): Promise<{ fileName: string; sizeBytes: number; path: string }> {
+  const clean = sanitizeBackupName(originalName);
+  if (!isPgDumpExtension(clean)) throw new Error("O ficheiro não é uma cópia pg_dump (esperava .dump ou .backup).");
+  const fileName = `subida-${new Date().toISOString().replace(/[:.]/g, "-")}-${clean}`;
+  await mkdir(folder, { recursive: true });
+  const full = path.join(folder, fileName);
+  try {
+    const reader = body.getReader();
+    const first = await reader.read();
+    if (first.done || !first.value) throw new Error("Ficheiro vazio.");
+    if (!isPgDumpHeader(first.value)) throw new Error("Isto não é uma cópia pg_dump em formato \"custom\" (volte a fazer o backup pelo painel e suba esse ficheiro).");
+    async function* rest(): AsyncGenerator<Uint8Array> {
+      let total = first.value!.byteLength;
+      if (total > backupUploadMaxBytes) { reader.cancel().catch(() => {}); throw new Error(`O ficheiro passa de ${Math.round(backupUploadMaxBytes / 1_000_000)} MB (limite da subida).`); }
+      yield first.value!;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        total += value.byteLength;
+        if (total > backupUploadMaxBytes) {
+          reader.cancel().catch(() => {});
+          throw new Error(`O ficheiro passa de ${Math.round(backupUploadMaxBytes / 1_000_000)} MB (limite da subida).`);
+        }
+        yield value;
+      }
+    }
+    await pipeline(Readable.from(rest()), createWriteStream(full));
+    // Valida a integridade lendo a tabela do dump — apanha subidas truncadas.
+    await runTool("pg_restore", ["--list", full], env.centralUrl).catch((e) => {
+      throw new Error(`O ficheiro subido não passa a validação do pg_restore: ${(e as Error).message}`);
+    });
+    const size = (await stat(full)).size;
+    return { fileName, sizeBytes: size, path: full };
+  } catch (e) {
+    await unlink(full).catch(() => {});
+    throw e;
+  }
+}
+
+/** Guarda uma cópia subida PARA UMA instituição e regista-a (aparece na lista, restaúvel pelo painel). */
+export async function saveInstitutionBackupUpload(institutionId: string, originalName: string, body: ReadableStream) {
+  const inst = await central().query.institutions.findFirst({ where: eq(c.institutions.id, institutionId) });
+  if (!inst) throw new Error("Instituição não encontrada.");
+  const saved = await savePgDumpUpload(backupFolder(inst.slug), originalName, body);
+  const [rec] = await central().insert(c.backupRecords).values({
+    institutionId: inst.id, fileName: saved.fileName, sizeBytes: saved.sizeBytes, manual: true, status: "DONE",
+  }).returning();
+  return { recordId: rec.id, ...saved, slug: inst.slug };
+}
+
+/** Guarda uma cópia subida DA CENTRAL (sem registo na própria central — é a BD que está a ser copiada). */
+export async function saveCentralBackupUpload(originalName: string, body: ReadableStream) {
+  const saved = await savePgDumpUpload(platformFolder(), originalName, body);
+  return saved;
+}
+
+/** Corpo de resposta com um ficheiro do disco (descarregar cópia). */
+export async function downloadBackupResponse(fullPath: string, fileName: string): Promise<Response> {
+  const st = await stat(fullPath).catch(() => null);
+  if (!st?.isFile()) throw new Error("O ficheiro de cópia já não está no servidor (retenção do disco).");
+  const stream = Readable.toWeb(createReadStream(fullPath)) as unknown as ReadableStream;
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${sanitizeBackupName(fileName)}"`,
+      "Content-Length": String(st.size),
+      "Cache-Control": "no-store",
+    },
+  });
 }
 
 /** Backup independente de UMA instituição (pg_dump em formato custom). */
@@ -68,6 +212,12 @@ export async function restoreInstitution(institutionId: string, backupId: string
 
 export async function pruneBackups() {
   const cutoff = new Date(Date.now() - env.backupRetentionDays * 86_400_000);
+  // Cópias da central não têm registo na BD (é a própria BD que se copia):
+  // aplicam-se-lhes os mesmos dias de retenção.
+  const platform = platformFolder();
+  for (const f of (await listCentralBackups()).filter((f) => f.createdAt < cutoff)) {
+    await unlink(path.join(platform, f.fileName)).catch(() => {});
+  }
   const old = await central().query.backupRecords.findMany({
     where: and(lt(c.backupRecords.createdAt, cutoff), eq(c.backupRecords.manual, false)), with: { institution: true },
   });

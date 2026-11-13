@@ -12,6 +12,9 @@
     "tenants:migrate": "tsx --conditions=react-server scripts/tenants.ts migrate",
     "tenants:backup": "tsx --conditions=react-server scripts/tenants.ts backup",
     "tenants:restore": "tsx --conditions=react-server scripts/tenants.ts restore",
+    "tenants:central-backup": "tsx --conditions=react-server scripts/tenants.ts central-backup",
+    "tenants:central-list": "tsx --conditions=react-server scripts/tenants.ts central-list",
+    "tenants:central-restore": "tsx --conditions=react-server scripts/tenants.ts central-restore",
     "test": "vitest run",
     "test:pages": "tsx --conditions=react-server scripts/crawl.ts",
     "db:generate": "drizzle-kit generate --config drizzle.central.config.ts && drizzle-kit generate --config drizzle.tenant.config.ts"

@@ -14,7 +14,7 @@ import { DIRECTOR_KEY } from "@/lib/permissions";
 import { getPlatformSettings, platformAction, platformAudit } from "@/lib/platform";
 import { bool, fail, run, str, type ActionResult } from "@/lib/result";
 import { createAuthToken, inviteMail, inviteUrl, resetUrl } from "@/lib/services/accounts";
-import { backupInstitution, liveInstitutions, migrateAllTenants, refreshStats, restoreInstitution } from "@/lib/services/ops";
+import { backupCentral, backupInstitution, liveInstitutions, migrateAllTenants, refreshStats, restoreInstitution } from "@/lib/services/ops";
 import { issueInvoiceIfDue, payPlatformInvoice, runBillingCycle, voidPlatformInvoice } from "@/lib/services/platform-billing";
 import { createInstitution, dropTenantDatabase, runProvisioning, slugProblem } from "@/lib/services/provisioning";
 
@@ -548,5 +548,19 @@ export async function toggleAdminAction(_p: S, fd: FormData): Promise<ActionResu
     if (target!.active) await destroyUserSessions("PLATFORM", id);
     await platformAudit(admin, target!.active ? "Administrador desativado" : "Administrador reativado", { details: { email: target!.email } });
     return { ok: true, message: target!.active ? "Conta desativada." : "Conta reativada." };
+  });
+}
+
+/** Cria uma cópia da base central (contas de acesso, instituições, planos). */
+export async function backupCentralNowAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const admin = await platformAction();
+    try {
+      await backupCentral();
+    } catch (e) {
+      fail(`Falha no backup da central: ${(e as Error).message}`);
+    }
+    await platformAudit(admin, "Backup manual da base central", { entity: "backup" });
+    return { ok: true, message: "Backup da central concluído." };
   });
 }
