@@ -10,11 +10,14 @@ import { requireTenant } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export default async function GuardiansPage({ params }: { params: Promise<{ slug: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: "children.view" });
-  const guardians = await ctx.db.query.guardians.findMany({
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "children.view" });
+  const all = await ctx.db.query.guardians.findMany({
     with: { user: true, children: { with: { child: true } } },
     orderBy: (g, { asc }) => asc(g.createdAt),
   });
+  // Quem só tem turmas atribuídas vê apenas as famílias das crianças dessas turmas.
+  const rooms = ctx.classroomIds;
+  const guardians = rooms === null ? all : all.filter((g) => g.children.some((l) => l.child.classroomId && rooms.includes(l.child.classroomId)));
   const canManage = ctx.can("guardians.manage") && !ctx.readOnly;
   const slug = ctx.institution.slug;
 

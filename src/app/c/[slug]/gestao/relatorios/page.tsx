@@ -15,7 +15,7 @@ const REPORTS = [
 ];
 
 export default async function ReportsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ de?: string; ate?: string }> }) {
-  const ctx = await requireTenant((await params).slug, { permission: ["reports.view", "finance.view", "children.view"] });
+  const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: ["reports.view", "finance.view", "children.view"] });
   const sp = await searchParams;
   const today = todayIn(ctx.settings.timezone);
   const monthStart = `${today.slice(0, 8)}01`;

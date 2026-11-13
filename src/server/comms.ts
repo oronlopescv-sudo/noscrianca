@@ -1,22 +1,46 @@
 "use server";
 
+import { after } from "next/server";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "@/db/tenant";
-import { fail, run, str, type ActionResult } from "@/lib/result";
+import { mailConfigured, sendMail } from "@/lib/mail";
+import { bool, fail, run, str, type ActionResult } from "@/lib/result";
+import { env } from "@/lib/env";
 import { audit, guardianChildIds, notify, staffCanSeeGuardian, tenantAction, type TenantCtx } from "@/lib/tenant";
 
 type S = ActionResult | null;
 
-/** IDs de utilizador dos encarregados com contas ativas (de uma turma ou de toda a instituição). */
-async function guardianUserIds(ctx: TenantCtx, classroomId: string | null): Promise<string[]> {
+type Recipient = { userId: string; name: string; email: string; active: boolean; href: string };
+const AUDIENCES = ["ALL", "GUARDIANS", "STAFF"] as const;
+type Audience = (typeof AUDIENCES)[number];
+
+/** Encarregados das crianças ativas (de uma turma ou de toda a instituição), sem contas suspensas. */
+async function guardianRecipients(ctx: TenantCtx, classroomId: string | null): Promise<Recipient[]> {
   const kids = await ctx.db.select({ id: t.children.id }).from(t.children)
     .where(and(eq(t.children.status, "ACTIVE"), classroomId ? eq(t.children.classroomId, classroomId) : undefined));
   if (!kids.length) return [];
-  const rows = await ctx.db.select({ userId: t.guardians.userId }).from(t.childGuardians)
+  const rows = await ctx.db.select({ userId: t.users.id, name: t.users.name, email: t.users.email, status: t.users.status, deletedAt: t.users.deletedAt })
+    .from(t.childGuardians)
     .innerJoin(t.guardians, eq(t.guardians.id, t.childGuardians.guardianId))
     .innerJoin(t.users, eq(t.users.id, t.guardians.userId))
-    .where(and(inArray(t.childGuardians.childId, kids.map((k) => k.id)), eq(t.users.status, "ACTIVE")));
-  return [...new Set(rows.map((r) => r.userId))];
+    .where(inArray(t.childGuardians.childId, kids.map((k) => k.id)));
+  return rows.filter((r) => r.status !== "SUSPENDED" && !r.deletedAt)
+    .map((r) => ({ userId: r.userId, name: r.name, email: r.email, active: r.status === "ACTIVE", href: `${ctx.base}/pais/comunicados` }));
+}
+
+/** Funcionários (educadores, auxiliares, etc.) que acompanham a turma, ou toda a equipa. Não inclui quem envia. */
+async function staffAudience(ctx: TenantCtx, classroomId: string | null): Promise<Recipient[]> {
+  const staff = await ctx.db.query.users.findMany({
+    where: and(eq(t.users.kind, "STAFF"), isNull(t.users.deletedAt)), with: { role: true, employee: { with: { classrooms: true } } },
+  });
+  return staff.filter((u) => {
+    if (u.id === ctx.user.id || u.status === "SUSPENDED" || !u.role) return false;
+    if (!classroomId || u.role.key === "DIRECTOR" || u.role.allClassrooms) return true;
+    return (u.employee?.classrooms ?? []).some((cl) => cl.classroomId === classroomId);
+  }).map((u) => ({
+    userId: u.id, name: u.name, email: u.email, active: u.status === "ACTIVE",
+    href: u.role!.panel === "CLASSROOM" ? `${ctx.base}/sala/comunicados` : u.role!.key === "DIRECTOR" || u.role!.permissions.includes("announcements.manage") ? `${ctx.base}/gestao/comunicados` : "",
+  }));
 }
 
 export async function createAnnouncementAction(_p: S, fd: FormData): Promise<ActionResult> {
@@ -27,11 +51,46 @@ export async function createAnnouncementAction(_p: S, fd: FormData): Promise<Act
     if (body.length < 3 || body.length > 5000) fail("Escreva a mensagem do comunicado.");
     const classroomId = str(fd, "classroomId") || null;
     if (classroomId && !(await ctx.db.query.classrooms.findFirst({ where: eq(t.classrooms.id, classroomId) }))) fail("Turma inválida.");
-    const [a] = await ctx.db.insert(t.announcements).values({ title, body, classroomId, createdById: ctx.user.id, createdByName: ctx.user.name }).returning();
-    const recipients = await guardianUserIds(ctx, classroomId);
-    await notify(ctx.db, recipients, { title: `Comunicado: ${title}`, body: body.slice(0, 140), href: `${ctx.base}/pais/comunicados` });
-    await audit(ctx, "Comunicado enviado", { entity: "announcement", entityId: a.id, details: { titulo: title, destinatarios: recipients.length } });
-    return { ok: true, message: `Comunicado enviado a ${recipients.length} encarregado(s).` };
+    // Quem só tem turmas atribuídas não pode enviar para outras turmas nem para toda a instituição.
+    if (ctx.classroomIds !== null && (!classroomId || !ctx.classroomIds.includes(classroomId))) fail("Só pode enviar comunicados para as suas turmas.");
+    const audience = (str(fd, "audience") || "GUARDIANS") as Audience;
+    if (!AUDIENCES.includes(audience)) fail("Destinatários inválidos.");
+    const guardians = audience === "STAFF" ? [] : await guardianRecipients(ctx, classroomId);
+    const staff = audience === "GUARDIANS" ? [] : await staffAudience(ctx, classroomId);
+    const seen = new Set<string>();
+    const recipients = [...guardians, ...staff].filter((r) => (seen.has(r.userId) ? false : (seen.add(r.userId), true)));
+    const [a] = await ctx.db.insert(t.announcements).values({ title, body, classroomId, audience, createdById: ctx.user.id, createdByName: ctx.user.name }).returning();
+
+    // Aviso dentro da aplicação (só contas já ativadas), com a ligação certa para cada painel.
+    for (const href of new Set(recipients.map((r) => r.href))) {
+      await notify(ctx.db, recipients.filter((r) => r.active && r.href === href).map((r) => r.userId), { title: `Comunicado: ${title}`, body: body.slice(0, 140), href });
+    }
+
+    // Email: enviado depois da resposta, para não prender o ecrã com muitos destinatários.
+    const wantEmail = bool(fd, "sendEmail");
+    const emails = wantEmail && mailConfigured() ? recipients.filter((r) => r.email) : [];
+    if (emails.length) {
+      const s = ctx.settings, db = ctx.db, who = { id: ctx.user.id, name: ctx.user.name };
+      after(async () => {
+        let sent = 0;
+        for (const r of emails) {
+          const ok = await sendMail({
+            to: r.email, replyTo: s.email || undefined, subject: `${s.name}: ${title}`,
+            text: [`Olá ${r.name},`, "", body, "", s.name, r.href ? `\nPode ler este comunicado também na aplicação: ${env.appUrl}${r.href}` : ""].join("\n"),
+          });
+          if (ok) sent++;
+        }
+        await db.insert(t.auditLogs).values({ userId: who.id, userName: who.name, action: "Comunicado enviado por email", entity: "announcement", entityId: a.id, details: { enviados: sent, destinatarios: emails.length } });
+        if (sent < emails.length) console.error(`[comunicado] ${emails.length - sent} de ${emails.length} emails falharam (${title})`);
+      });
+    }
+
+    await audit(ctx, "Comunicado enviado", { entity: "announcement", entityId: a.id, details: { titulo: title, destinatarios: recipients.length, pais: guardians.length, equipa: staff.length, email: emails.length } });
+    const whom = `${guardians.length} encarregado(s)${audience === "GUARDIANS" ? "" : ` e ${staff.length} funcionário(s)`}`;
+    const target = audience === "STAFF" ? `${staff.length} funcionário(s)` : whom;
+    if (!wantEmail) return { ok: true, message: `Comunicado publicado para ${target}.` };
+    if (!mailConfigured()) return { ok: true, message: `Comunicado publicado para ${target}. O email não está configurado no servidor, por isso não foi enviado email.` };
+    return { ok: true, message: `Comunicado publicado para ${target}. A enviar ${emails.length} email(s).` };
   });
 }
 

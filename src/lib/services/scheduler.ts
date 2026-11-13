@@ -4,6 +4,7 @@ import { getTenantDb } from "@/db/tenant";
 import { todayIn } from "@/lib/format";
 import { bootstrapCentral } from "./bootstrap";
 import { generateMonthlyInvoices } from "./finance";
+import { sendOverdueReminders } from "./reminders";
 import { backupInstitution, liveInstitutions, pruneBackups, refreshStats } from "./ops";
 import { runBillingCycle } from "./platform-billing";
 import { resumePendingJobs } from "./provisioning";
@@ -38,11 +39,14 @@ async function runGlobalDailyTasks() {
 }
 
 /** Tarefas de cada instituição, à meia-noite LOCAL de cada uma. */
-async function runInstitutionDailyTasks(instId: string, slug: string, isSuspended: boolean, today: string) {
+async function runInstitutionDailyTasks(instId: string, slug: string, timezone: string, isSuspended: boolean, today: string) {
   try {
     if (!isSuspended) {
       // Geração mensal automática das mensalidades (idempotente).
       await generateMonthlyInvoices(await getTenantDb(instId), today.slice(0, 7), today);
+      // Avisos automáticos de faturas em atraso (email e notificação no portal).
+      const r = await sendOverdueReminders({ id: instId, slug, timezone });
+      if (r.sent || r.failed) console.log(`[avisos] ${slug}: ${r.sent} enviados, ${r.failed} falhados`);
     }
     await refreshStats(instId);
     await backupInstitution(instId, false);
@@ -64,7 +68,7 @@ async function tick() {
       const today = todayIn(inst.timezone);
       await once(
         `daily-inst:${inst.id}:${today}`,
-        () => runInstitutionDailyTasks(inst.id, inst.slug, inst.status === "SUSPENDED", today),
+        () => runInstitutionDailyTasks(inst.id, inst.slug, inst.timezone, inst.status === "SUSPENDED", today),
       );
     }
     await pruneBackups();

@@ -1,5 +1,5 @@
 // BD DE CADA INSTITUIÇÃO — uma base de dados PostgreSQL independente por creche.
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createId } from "@paralleldrive/cuid2";
 
@@ -65,9 +65,35 @@ export const employees = pgTable("employees", {
   schedule: text("schedule").notNull().default(""),
   address: text("address").notNull().default(""),
   notes: text("notes").notNull().default(""),
+  /** Salário mensal base (em cêntimos). null = ainda não definido. */
+  salaryCents: integer("salary_cents"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/** Salários pagos pela instituição a cada funcionário (um pagamento válido por mês). */
+export const salaryPayments = pgTable("salary_payments", {
+  id: id(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+  period: text("period").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  /** Salário base do mês no momento do pagamento (null = pagamento anterior a este registo). */
+  baseCents: integer("base_cents"),
+  /** Dias de falta descontados neste mês e o valor descontado (ficam registados no recibo). */
+  absentDays: integer("absent_days").notNull().default(0),
+  absenceDiscountCents: integer("absence_discount_cents").notNull().default(0),
+  paidAt: text("paid_at").notNull(),
+  method: paymentMethod("method").notNull(),
+  notes: text("notes").notNull().default(""),
+  recordedById: text("recorded_by_id").notNull(),
+  recordedByName: text("recorded_by_name").notNull(),
+  voidedAt: ts("voided_at"),
+  voidedByName: text("voided_by_name"),
+  createdAt: createdAt(),
+}, (t) => [
+  uniqueIndex("salary_employee_period_uq").on(t.employeeId, t.period).where(sql`${t.voidedAt} is null`),
+  index("salary_period_idx").on(t.period),
+]);
 
 export const guardians = pgTable("guardians", {
   id: id(),
@@ -245,6 +271,8 @@ export const announcements = pgTable("announcements", {
   title: text("title").notNull(),
   body: text("body").notNull(),
   classroomId: text("classroom_id").references(() => classrooms.id, { onDelete: "set null" }),
+  /** Quem vê o comunicado: ALL (pais e equipa), GUARDIANS (só pais) ou STAFF (só equipa). */
+  audience: text("audience").notNull().default("ALL"),
   createdById: text("created_by_id").notNull(),
   createdByName: text("created_by_name").notNull(),
   createdAt: createdAt(),
@@ -296,10 +324,104 @@ export const settings = pgTable("settings", {
   schoolYear: text("school_year").notNull().default(""),
   invoiceDueDay: integer("invoice_due_day").notNull().default(8),
   paymentInfo: text("payment_info").notNull().default(""),
+  reminderEnabled: boolean("reminder_enabled").notNull().default(false),
+  reminderDays: text("reminder_days").notNull().default("1,7"),
+  publicDescription: text("public_description").notNull().default(""),
+  publicHours: text("public_hours").notNull().default(""),
   invoiceCounter: integer("invoice_counter").notNull().default(0),
   receiptCounter: integer("receipt_counter").notNull().default(0),
   updatedAt: updatedAt(),
 });
+
+/** Pedidos de inscrição feitos por visitantes na página pública. */
+export const enrollmentRequests = pgTable("enrollment_requests", {
+  id: id(),
+  guardianName: text("guardian_name").notNull(),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  childName: text("child_name").notNull(),
+  childBirthDate: text("child_birth_date"),
+  message: text("message").notNull().default(""),
+  /** NEW (por tratar), CONTACTED (em contacto) ou CLOSED (fechado). */
+  status: text("status").notNull().default("NEW"),
+  handledByName: text("handled_by_name"),
+  createdAt: createdAt(),
+}, (t) => [index("enrollment_status_idx").on(t.status)]);
+
+/** Comprovativos de pagamento enviados pelos encarregados, à espera de confirmação. */
+export const paymentProofs = pgTable("payment_proofs", {
+  id: id(),
+  invoiceId: text("invoice_id").notNull().references(() => invoices.id, { onDelete: "restrict" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  userName: text("user_name").notNull(),
+  path: text("path").notNull(),
+  note: text("note").notNull().default(""),
+  /** PENDING (por confirmar), ACCEPTED (pagamento registado) ou REJECTED (recusado). */
+  status: text("status").notNull().default("PENDING"),
+  reviewedByName: text("reviewed_by_name"),
+  reviewNote: text("review_note").notNull().default(""),
+  reviewedAt: ts("reviewed_at"),
+  createdAt: createdAt(),
+}, (t) => [index("proofs_invoice_idx").on(t.invoiceId), index("proofs_status_idx").on(t.status)]);
+
+/** Agenda da instituição: eventos, reuniões, feriados e férias. */
+export const events = pgTable("events", {
+  id: id(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  date: text("date").notNull(),
+  endDate: text("end_date"),
+  classroomId: text("classroom_id").references(() => classrooms.id, { onDelete: "set null" }),
+  /** ALL (pais e equipa), GUARDIANS (só pais) ou STAFF (só equipa). */
+  audience: text("audience").notNull().default("ALL"),
+  createdByName: text("created_by_name").notNull(),
+  createdAt: createdAt(),
+}, (t) => [index("events_date_idx").on(t.date)]);
+
+/** Férias e faltas da equipa, pedidas pelo funcionário e decididas pela direção. */
+export const staffLeaves = pgTable("staff_leaves", {
+  id: id(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+  /** VACATION (férias), SICK (doença) ou OTHER (outra falta). */
+  type: text("type").notNull(),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  notes: text("notes").notNull().default(""),
+  /** PENDING (por decidir), APPROVED (aprovado) ou REJECTED (recusado). */
+  status: text("status").notNull().default("PENDING"),
+  decidedByName: text("decided_by_name"),
+  decidedAt: ts("decided_at"),
+  createdAt: createdAt(),
+}, (t) => [index("leaves_employee_idx").on(t.employeeId), index("leaves_status_idx").on(t.status)]);
+
+/** Faltas da equipa registadas no calendário. As que "descontam" reduzem o salário do mês (1/30 por dia). */
+export const staffAbsences = pgTable("staff_absences", {
+  id: id(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+  date: text("date").notNull(),
+  deductible: boolean("deductible").notNull().default(true),
+  reason: text("reason").notNull().default(""),
+  recordedByName: text("recorded_by_name").notNull(),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("staff_absence_employee_date_uq").on(t.employeeId, t.date), index("staff_absence_date_idx").on(t.date)]);
+
+/** Fotografias da página pública da instituição (visíveis a qualquer visitante). */
+export const publicPhotos = pgTable("public_photos", {
+  id: id(),
+  path: text("path").notNull(),
+  caption: text("caption").notNull().default(""),
+  createdAt: createdAt(),
+});
+
+/** Avisos de cobrança enviados (um por fatura, etapa e encarregado). */
+export const invoiceReminders = pgTable("invoice_reminders", {
+  id: id(),
+  invoiceId: text("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  stage: integer("stage").notNull(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  sentAt: ts("sent_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("reminders_unique_idx").on(t.invoiceId, t.stage, t.userId)]);
 
 export const auditLogs = pgTable("audit_logs", {
   id: id(),
@@ -377,6 +499,18 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
 }));
 export const receiptsRelations = relations(receipts, ({ one }) => ({
   payment: one(payments, { fields: [receipts.paymentId], references: [payments.id] }),
+}));
+export const paymentProofsRelations = relations(paymentProofs, ({ one }) => ({
+  invoice: one(invoices, { fields: [paymentProofs.invoiceId], references: [invoices.id] }),
+}));
+export const eventsRelations = relations(events, ({ one }) => ({
+  classroom: one(classrooms, { fields: [events.classroomId], references: [classrooms.id] }),
+}));
+export const staffLeavesRelations = relations(staffLeaves, ({ one }) => ({
+  employee: one(employees, { fields: [staffLeaves.employeeId], references: [employees.id] }),
+}));
+export const staffAbsencesRelations = relations(staffAbsences, ({ one }) => ({
+  employee: one(employees, { fields: [staffAbsences.employeeId], references: [employees.id] }),
 }));
 export const announcementsRelations = relations(announcements, ({ one }) => ({
   classroom: one(classrooms, { fields: [announcements.classroomId], references: [classrooms.id] }),

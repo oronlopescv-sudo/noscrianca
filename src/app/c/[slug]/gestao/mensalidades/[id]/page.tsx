@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function InvoicePage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
-  const ctx = await requireTenant(slug, { permission: "finance.view" });
+  const ctx = await requireTenant(slug, { panel: "MANAGEMENT", permission: "finance.view" });
   const inv = await ctx.db.query.invoices.findFirst({
     where: eq(t.invoices.id, id),
     with: { child: true, items: { orderBy: [asc(t.invoiceItems.id)] }, payments: { with: { receipt: true }, orderBy: [asc(t.payments.createdAt)] } },

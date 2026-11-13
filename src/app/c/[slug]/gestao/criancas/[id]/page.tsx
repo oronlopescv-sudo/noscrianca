@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { and, desc, eq, gte } from "drizzle-orm";
 import { t } from "@/db/tenant";
+import { ChildCalendar, calendarMonth } from "@/components/tenant/child-calendar";
 import { ChildForm } from "@/components/tenant/child-form";
 import { DiaryFeed, type FeedEntry } from "@/components/tenant/diary";
 import { ActionButton, ActionForm, ConfirmAction, Submit } from "@/components/ui/client";
@@ -16,9 +17,9 @@ import { attState } from "@/components/tenant/attendance";
 
 export const dynamic = "force-dynamic";
 
-export default async function ChildPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
+export default async function ChildPage({ params, searchParams }: { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ mes?: string }> }) {
   const { slug, id } = await params;
-  const ctx = await requireTenant(slug, { permission: "children.view" });
+  const ctx = await requireTenant(slug, { panel: "MANAGEMENT", permission: "children.view" });
   const child = await ctx.db.query.children.findFirst({
     where: eq(t.children.id, id),
     with: {
@@ -37,7 +38,7 @@ export default async function ChildPage({ params }: { params: Promise<{ slug: st
   const [att, diary, invoices, classrooms, feePlans, allGuardians] = await Promise.all([
     ctx.db.select().from(t.attendance).where(and(eq(t.attendance.childId, id), gte(t.attendance.date, from))).orderBy(desc(t.attendance.date)),
     ctx.can("diary.view") ? ctx.db.query.diaryEntries.findMany({ where: and(eq(t.diaryEntries.childId, id), eq(t.diaryEntries.visible, true)), orderBy: [desc(t.diaryEntries.occurredAt)], limit: 25 }) : Promise.resolve([]),
-    ctx.db.query.invoices.findMany({ where: eq(t.invoices.childId, id), orderBy: [desc(t.invoices.period)], limit: 12 }),
+    ctx.can("finance.view") ? ctx.db.query.invoices.findMany({ where: eq(t.invoices.childId, id), orderBy: [desc(t.invoices.period)], limit: 12 }) : Promise.resolve([]),
     visibleClassrooms(ctx, false),
     ctx.db.query.feePlans.findMany({ orderBy: (f, { asc }) => asc(f.name) }),
     ctx.db.query.guardians.findMany({ with: { user: true }, orderBy: (g, { asc }) => asc(g.createdAt) }),
@@ -66,6 +67,12 @@ export default async function ChildPage({ params }: { params: Promise<{ slug: st
         )}
       />
 
+      <div className="mb-5">
+        <ChildCalendar ctx={ctx} childId={id} month={calendarMonth((await searchParams).mes, today)} basePath={`${ctx.base}/gestao/criancas/${id}`}
+          showFinance={ctx.can("finance.view")} showAttendance={ctx.can("attendance.view")} manage canPay={ctx.can("finance.manage") && !ctx.readOnly}
+          issueBlocked={child.status !== "ACTIVE" ? "Reative a criança para emitir mensalidades." : !child.feePlan ? "Atribua um plano de mensalidade na ficha para emitir mensalidades." : null} />
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           <Card title="Ficha da criança">
@@ -84,12 +91,19 @@ export default async function ChildPage({ params }: { params: Promise<{ slug: st
             {child.guardians.length === 0 ? <EmptyState title="Sem encarregados" text="Associe pelo menos um encarregado para que a família veja a criança." /> : (
               <ul className="divide-y divide-line">
                 {child.guardians.map((g) => (
-                  <li key={g.guardianId} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                    <div className="flex items-center gap-3">
+                  <li key={g.guardianId} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                    <div className="flex items-start gap-3">
                       <Avatar name={g.guardian.user.name} size={36} />
                       <div>
                         <p className="font-medium">{g.guardian.user.name} {g.isPrimary && <Badge tone="accent">Principal</Badge>}</p>
-                        <p className="text-xs text-ink-soft">{g.relationship} · {g.guardian.user.email}{g.canPickup ? " · pode recolher" : ""}{g.guardian.user.status === "INVITED" ? " · convite pendente" : ""}</p>
+                        <p className="text-xs text-ink-soft">{g.relationship}{g.canPickup ? " · pode recolher" : ""}{g.guardian.user.status === "INVITED" ? " · convite pendente" : ""}{g.guardian.user.status === "SUSPENDED" ? " · conta suspensa" : ""}</p>
+                        <dl className="mt-1.5 grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-2">
+                          <div><dt className="inline text-ink-soft">Email: </dt><dd className="inline"><a href={`mailto:${g.guardian.user.email}`} className="link">{g.guardian.user.email}</a></dd></div>
+                          <div><dt className="inline text-ink-soft">Telefone: </dt><dd className="inline">{g.guardian.user.phone ? <><a href={`tel:${g.guardian.user.phone}`} className="link">{g.guardian.user.phone}</a>{g.guardian.user.phone.replace(/[^0-9]/g, "").length >= 7 && <> · <a href={`https://wa.me/${g.guardian.user.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener" className="link">WhatsApp</a></>}</> : "—"}</dd></div>
+                          <div><dt className="inline text-ink-soft">Morada: </dt><dd className="inline">{g.guardian.address || "—"}</dd></div>
+                          <div><dt className="inline text-ink-soft">Profissão: </dt><dd className="inline">{g.guardian.occupation || "—"}</dd></div>
+                          <div><dt className="inline text-ink-soft">Documento: </dt><dd className="inline">{g.guardian.idDocument || "—"}</dd></div>
+                        </dl>
                       </div>
                     </div>
                     {canManage && <ConfirmAction action={unlinkGuardianAction} hidden={{ slug, childId: id, guardianId: g.guardianId }} label="Desassociar" title="Desassociar encarregado" text="A família deixa de ver esta criança. A conta do encarregado mantém-se." confirmLabel="Desassociar" danger />}
@@ -202,7 +216,7 @@ export default async function ChildPage({ params }: { params: Promise<{ slug: st
             )}
           </Card>
 
-          <Card title="Mensalidades" pad={false}>
+          {ctx.can("finance.view") && <Card title="Mensalidades" pad={false}>
             {invoices.length === 0 ? <div className="card-pad text-sm text-ink-soft">Sem faturas.</div> : (
               <ul className="divide-y divide-line">
                 {invoices.map((i) => (
@@ -213,7 +227,7 @@ export default async function ChildPage({ params }: { params: Promise<{ slug: st
                 ))}
               </ul>
             )}
-          </Card>
+          </Card>}
         </div>
       </div>
 
