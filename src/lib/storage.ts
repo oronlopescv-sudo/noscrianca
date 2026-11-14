@@ -2,6 +2,7 @@ import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { env } from "./env";
+import { stripImageMetadata } from "./image-metadata";
 import { ActionError } from "./result";
 
 const IMAGE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
@@ -32,8 +33,13 @@ export async function saveUpload(
   const rel = `${folder}/${Date.now()}-${randomBytes(6).toString("hex")}.${ext}`;
   const full = resolveTenantFile(institutionId, rel);
   await mkdir(path.dirname(full), { recursive: true });
-  await writeFile(full, Buffer.from(await f.arrayBuffer()));
-  return { path: rel, mime: f.type, size: f.size };
+  // Fotos de crianças: GPS, câmara, comentários e IPTC ficam fora (a orientação
+  // EXIF e o perfil de cor mantêm-se). Qualquer ficheiro estranho é gravado
+  // como veio.
+  const raw = Buffer.from(await f.arrayBuffer());
+  const limpo = stripImageMetadata(raw, f.type);
+  await writeFile(full, limpo);
+  return { path: rel, mime: f.type, size: limpo.length };
 }
 
 export async function readTenantFile(institutionId: string, relPath: string): Promise<{ data: Buffer; mime: string } | null> {

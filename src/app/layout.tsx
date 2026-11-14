@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 import "@fontsource-variable/inter";
 import "./globals.css";
 import { RegisterSW } from "@/components/pwa";
+import { env } from "@/lib/env";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(env.appUrl),
   title: { default: "NosCriança", template: "%s · NosCriança" },
   description: "Plataforma de gestão de creches e jardins de infância.",
   manifest: "/manifest.webmanifest",

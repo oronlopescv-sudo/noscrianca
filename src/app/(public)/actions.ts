@@ -11,11 +11,14 @@ import { fail, run, str, type ActionResult } from "@/lib/result";
 import { clientIp } from "@/lib/request-ip";
 import { headers } from "next/headers";
 
+const TEL_RE = /^[+]?[\d\s().-]{7,19}$/;
+const telefone = z.string().max(40).refine((v) => !v || TEL_RE.test(v.trim()), "Telefone inválido — veja se tem só números, espaços e ( + ) - .");
+
 const signupSchema = z.object({
   institutionName: z.string().min(2, "Indique o nome da instituição.").max(120),
   contactName: z.string().min(2, "Indique o seu nome.").max(120),
   email: z.string().email("Email inválido.").max(160),
-  phone: z.string().max(40),
+  phone: telefone,
   city: z.string().max(80),
   childrenEstimate: z.string().regex(/^\d{0,5}$/, "Número de crianças inválido."),
   message: z.string().max(1000),
@@ -53,7 +56,7 @@ export async function findInstitutionAction(_p: ActionResult | null, fd: FormDat
 const enrollmentSchema = z.object({
   guardianName: z.string().min(2, "Indique o seu nome.").max(120),
   email: z.union([z.string().email("Email inválido.").max(160), z.literal("")]),
-  phone: z.string().max(40),
+  phone: telefone,
   childName: z.string().min(2, "Indique o nome da criança.").max(120),
   message: z.string().max(1000),
 });

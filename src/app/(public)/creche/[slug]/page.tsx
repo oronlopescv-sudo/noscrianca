@@ -3,11 +3,13 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { cache } from "react";
 import { asc, eq } from "drizzle-orm";
-import { CheckCircle2, Clock, Mail, MapPin, Phone } from "lucide-react";
+import { CheckCircle2, Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { ActionForm, Submit } from "@/components/ui/client";
 import { Field } from "@/components/ui/kit";
 import { getTenantDb, t } from "@/db/tenant";
 import { ROOM_COLORS } from "@/lib/labels";
+import { whatsappNumber } from "@/lib/collection-rules";
+import { readableTextColorOn } from "@/lib/contrast";
 import { getInstitutionBySlug, institutionUsable } from "@/lib/tenant";
 import { requestEnrollmentAction } from "../../actions";
 
@@ -28,8 +30,22 @@ const load = cache(async (slug: string) => {
 });
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const d = await load((await params).slug).catch(() => null);
-  return { title: d ? (d.s?.name ?? d.inst.name) : "Instituição" };
+  const { slug } = await params;
+  const d = await load(slug).catch(() => null);
+  if (!d) return { title: "Instituição" };
+  const name = d.s?.name ?? d.inst.name;
+  const desc = (d.s?.publicDescription || `A ${name} em ${d.inst.city}: contactos, salas e pedido de inscrição online.`).slice(0, 300);
+  return {
+    title: name,
+    description: desc,
+    openGraph: {
+      title: name,
+      description: desc,
+      locale: "pt_CV",
+      type: "website",
+      images: d.s?.logoPath ? [{ url: `/c/${slug}/logo` }] : undefined,
+    },
+  };
 }
 
 const ages = (min: number | null, max: number | null) => {
@@ -49,16 +65,22 @@ export default async function PublicInstitution({ params, searchParams }: { para
   const phone = s?.phone || inst.phone;
   const email = s?.email || inst.email;
   const accent = /^#[0-9a-fA-F]{6}$/.test(s?.accentColor ?? "") ? s!.accentColor : "#F0714F";
+  // Accent é escolhido pela diretora e pode ser claro: a cor do texto por cima
+  // adapta-se (branco ou navy) para manter contraste legível.
+  const onAccent = readableTextColorOn(accent);
+  const wa = whatsappNumber(phone || "");
+  const waHref = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(`Olá! Vim da página online da ${name} e gostava de ficar a saber mais.`)}` : null;
   const contacts = [
     address && { icon: <MapPin size={18} />, label: "Morada", node: <span>{address}</span> },
     phone && { icon: <Phone size={18} />, label: "Telefone", node: <a href={`tel:${phone}`} className="link">{phone}</a> },
+    waHref && { icon: <MessageCircle size={18} />, label: "WhatsApp", node: <a href={waHref} target="_blank" rel="noopener" className="link">Falar no WhatsApp</a> },
     email && { icon: <Mail size={18} />, label: "Email", node: <a href={`mailto:${email}`} className="link">{email}</a> },
     s?.publicHours && { icon: <Clock size={18} />, label: "Horário", node: <span className="whitespace-pre-wrap">{s.publicHours}</span> },
   ].filter(Boolean) as { icon: React.ReactNode; label: string; node: React.ReactNode }[];
 
   return (
     <main>
-      <section className="text-white" style={{ backgroundColor: accent }}>
+      <section style={{ backgroundColor: accent, color: onAccent }}>
         <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:py-14">
           <div className="flex items-center gap-4">
             {s?.logoPath
@@ -72,7 +94,12 @@ export default async function PublicInstitution({ params, searchParams }: { para
           </div>
           <div className="flex flex-col gap-2 sm:items-end">
             {inst.status !== "SUSPENDED" && <a href="#inscricao" className="btn bg-white px-6 font-semibold text-ink hover:bg-white/90">Pedir inscrição</a>}
-            <Link href={`/c/${slug}/entrar`} className="btn border border-white/50 px-6 text-white hover:bg-white/10">Entrar</Link>
+            {waHref && (
+              <a href={waHref} target="_blank" rel="noopener" className="btn border px-6 hover:bg-white/10" style={{ color: onAccent, borderColor: `${onAccent}66` }}>
+                <MessageCircle size={18} /> WhatsApp
+              </a>
+            )}
+            <Link href={`/c/${slug}/entrar`} className="btn border px-6 hover:bg-white/10" style={{ color: onAccent, borderColor: `${onAccent}66` }}>Entrar</Link>
             <p className="text-xs opacity-90">Direção, equipa e encarregados</p>
           </div>
         </div>
