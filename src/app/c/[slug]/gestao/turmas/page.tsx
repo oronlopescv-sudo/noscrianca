@@ -57,8 +57,8 @@ export default async function ClassroomsPage({ params }: { params: Promise<{ slu
             const n = countOf.get(r.id) ?? 0;
             return (
               <Card key={r.id} pad={false} className="overflow-hidden">
-                <div className="flex items-center justify-between gap-3 p-4" style={{ background: c.hex }}>
-                  <p className="truncate text-base font-semibold text-white drop-shadow-sm">{r.name}</p>
+                <div className="flex items-center justify-between gap-3 p-4" style={{ background: c.hex, color: c.ink }}>
+                  <p className="truncate text-base font-semibold">{r.name}</p>
                   {!r.active && <Badge tone="gray">Inativa</Badge>}
                 </div>
                 <div className="space-y-2 p-4 text-sm">

@@ -3,8 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --accent: 240 113 79;
+  /* Accent por defeito da plataforma: um coral ESCURO (branco por cima tem
+   * 5.2:1 de contraste — o coral claro #F0714F não chegava a 3:1). */
+  --accent: 194 65 12;
+  /* Texto sobre o accent adapta-se à cor de cada instituição (o layout de
+   * /c/<slug> define --accent-ink por contraste; aqui fica branco). */
+  --accent-ink: 255 255 255;
 }
+
+/* Tudo o que tem fundo de accent herda a cor de texto por contraste — por isso
+ * os chips, bolhas de mensagem, selos e botões primários de cada creche ficam
+ * legíveis mesmo quando a diretora escolhe um accent claro. */ .bg-accent { color: rgb(var(--accent-ink)); }
 
 @layer base {
   html { -webkit-tap-highlight-color: transparent; }

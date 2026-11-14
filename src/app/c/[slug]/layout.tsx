@@ -11,5 +11,5 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function TenantLayout({ children, params }: { children: ReactNode; params: Promise<{ slug: string }> }) {
   const b = await tenantBranding((await params).slug);
-  return <div style={{ "--accent": b.accent } as CSSProperties}>{children}</div>;
+  return <div style={{ "--accent": b.accent, "--accent-ink": b.accentInk } as CSSProperties}>{children}</div>;
 }

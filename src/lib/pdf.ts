@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { contrastRatio } from "./contrast";
 
 export type DocPdf = {
   kind: string;            // "RECIBO", "FATURA"
@@ -20,7 +21,15 @@ const LINE = rgb(0.9, 0.91, 0.92);
 
 function hexToRgb(hex?: string) {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex ?? "");
-  return m ? rgb(parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255) : rgb(0.94, 0.44, 0.31);
+  return m ? rgb(parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255) : rgb(194 / 255, 65 / 255, 12 / 255);
+}
+
+/** Cor do texto do género de documento sobre papel branco: com accents claros
+ * (o laranja por defeito, p.ex.) o contraste não chega — nesse caso, navy. */
+function corDeTextoPorContraste(hex?: string) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex ?? "");
+  const cor = m ? `#${m[1]}${m[2]}${m[3]}` : "#C2410C";
+  return contrastRatio(cor.toUpperCase(), "#FFFFFF") >= 4.5 ? hexToRgb(cor) : INK;
 }
 
 /** As fontes standard só suportam WinAnsi: substitui caracteres fora desse conjunto. */
@@ -71,7 +80,7 @@ export async function buildDocPdf(d: DocPdf): Promise<Uint8Array> {
 
   page.drawRectangle({ x: 0, y: H - 8, width: W, height: 8, color: accent });
   text(d.issuer.name, M, y - 10, { size: 16, f: bold });
-  right(d.kind, W - M, y - 8, { size: 18, f: bold, color: accent });
+  right(d.kind, W - M, y - 8, { size: 18, f: bold, color: corDeTextoPorContraste(d.accent) });
   right(`N.º ${d.number}`, W - M, y - 26, { size: 11, f: bold });
   y -= 30;
   for (const l of d.issuer.lines.filter(Boolean).flatMap((l) => wrap(l, font, 9, 280))) {

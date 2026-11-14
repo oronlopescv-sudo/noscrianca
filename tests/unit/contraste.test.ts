@@ -16,6 +16,8 @@ describe("contraste das cores de instituição", () => {
   it("accent escuro ganha texto branco", () => {
     expect(readableTextColorOn("#1B2333")).toBe("#FFFFFF");
     expect(readableTextColorOn("#0E7490")).toBe("#FFFFFF");
+    expect(readableTextColorOn("#C2410C")).toBe("#FFFFFF");
+    expect(contrastRatio("#FFFFFF", "#C2410C")).toBeGreaterThan(4.5);
   });
 
   it("accent quase branco ganha navy (era quase ilegível com branco)", () => {
