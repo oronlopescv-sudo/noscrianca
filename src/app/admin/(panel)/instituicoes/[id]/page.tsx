@@ -1,3 +1,4 @@
+import { ILHAS } from "@/lib/islands";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
@@ -71,7 +72,13 @@ async function Summary({ inst, live }: { inst: Inst; live: boolean }) {
                 <Field label="Email"><input name="email" type="email" className="input" defaultValue={inst.email} /></Field>
                 <Field label="Telefone"><input name="phone" className="input" defaultValue={inst.phone} maxLength={40} /></Field>
                 <Field label="Morada"><input name="address" className="input" defaultValue={inst.address} maxLength={200} /></Field>
-                <Field label="Cidade / ilha"><input name="city" className="input" defaultValue={inst.city} maxLength={80} /></Field>
+                <Field label="Ilha">
+                  <select name="island" className="input" defaultValue={inst.island}>
+                    <option value="">—</option>
+                    {ILHAS.map((ilha) => <option key={ilha} value={ilha}>{ilha}</option>)}
+                  </select>
+                </Field>
+                <Field label="Cidade / localidade"><input name="city" className="input" defaultValue={inst.city} maxLength={80} /></Field>
                 <Field label="Plano">
                   <select name="planId" className="input" defaultValue={inst.planId ?? ""} required>
                     {plans.filter((p) => p.active || p.id === inst.planId).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
