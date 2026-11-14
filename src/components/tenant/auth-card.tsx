@@ -4,7 +4,7 @@ import { PlainShell } from "@/components/shell";
 export function AuthCard({ name, logoSrc, title, subtitle, children, footer }: { name: string; logoSrc: string | null; title: string; subtitle?: string; children: ReactNode; footer?: ReactNode }) {
   return (
     <PlainShell>
-      <main className="flex min-h-dvh items-center justify-center bg-navy px-4 py-10">
+      <main className="flex min-h-dvh items-center justify-center bg-[#1E4FA3] px-4 py-10">
         <div className="w-full max-w-sm">
           <div className="mb-5 flex flex-col items-center text-center text-white">
             {logoSrc

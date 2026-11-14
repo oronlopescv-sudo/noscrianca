@@ -28,7 +28,7 @@ export function SidebarShell(p: ShellProps) {
   useEffect(() => setOpen(false), [pathname]);
 
   const sidebar = (
-    <div className="flex h-full flex-col bg-navy text-navy-text">
+    <div className="flex h-full flex-col bg-[#1E4FA3] text-blue-100">
       <div className="flex items-center gap-3 px-5 py-5">
         {p.logoSrc
           // eslint-disable-next-line @next/next/no-img-element
