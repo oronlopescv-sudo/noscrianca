@@ -116,7 +116,17 @@ export default async function PublicInstitution({ params, searchParams }: { para
             style={{ background: `linear-gradient(180deg, ${comAlpha(accent, 0.5)} 0%, ${comAlpha("#1B2333", 0.88)} 85%, ${comAlpha("#1B2333", 0.95)} 100%)` }}
           />
         ) : null}
-        <div className="relative mx-auto flex min-h-[460px] max-w-5xl flex-col justify-end px-4 pb-10 pt-20 sm:pb-14 lg:min-h-[540px]">
+        {/* Decoração lúdica: bolhas coloridas e uma onda no fundo */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <span className="absolute -left-6 top-24 h-24 w-24 animate-pulse rounded-full bg-[#5DC98A]/70" />
+          <span className="absolute right-10 top-16 h-16 w-16 rounded-full bg-[#F5B93A]/80" />
+          <span className="absolute right-1/4 top-44 h-10 w-10 rounded-full bg-[#5B8DEF]/80" />
+          <span className="absolute left-1/3 top-10 h-6 w-6 rounded-full bg-[#A77BDB]/90" />
+          <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 1440 120" preserveAspectRatio="none">
+            <path d="M0,64 C240,120 480,0 720,48 C960,96 1200,24 1440,72 L1440,120 L0,120 Z" fill="#F6F7F9" />
+          </svg>
+        </div>
+        <div className="relative mx-auto flex min-h-[460px] max-w-5xl flex-col justify-end px-4 pb-16 pt-20 sm:pb-20 lg:min-h-[540px]">
           {inst.city && <p className="text-sm opacity-90">{inst.city}</p>}
           <h1 className="display mt-2 flex max-w-3xl flex-wrap items-center gap-4 text-4xl leading-tight sm:text-6xl">
             {s?.logoPath && (
@@ -129,7 +139,7 @@ export default async function PublicInstitution({ params, searchParams }: { para
           {abertura && <p className="mt-4 max-w-2xl text-base opacity-95 sm:text-lg">{abertura}</p>}
           <div className="mt-7 flex flex-wrap items-center gap-3">
             {inst.status !== "SUSPENDED" && (
-              <a href="#inscricao" className="btn px-6 font-semibold" style={{ backgroundColor: accent, color: onAccent }}>Pedir inscrição</a>
+              <a href="#inscricao" className="btn rounded-full px-7 py-3 font-bold shadow-lg transition hover:-translate-y-0.5" style={{ backgroundColor: accent, color: onAccent }}>Pedir inscrição</a>
             )}
             {waHref && (
               <a href={waHref} target="_blank" rel="noopener" className="btn border border-white/40 px-6 hover:bg-white/10">
@@ -161,7 +171,7 @@ export default async function PublicInstitution({ params, searchParams }: { para
         <div aria-hidden className="pointer-events-none absolute -left-20 top-96 h-72 w-72 rounded-full bg-[#F5B93A]/20 blur-3xl" />
         {/* ——— Apresentação ——— */}
         <section id="sobre" className="scroll-mt-16">
-          <h2 className="display flex items-center gap-3 text-2xl sm:text-3xl"><span aria-hidden className="h-2 w-10 rounded-full bg-gradient-to-r from-[#A77BDB] to-[#F0714F]" />A {name}</h2>
+          <h2 className="display flex items-center gap-3 text-3xl font-extrabold sm:text-4xl"><span aria-hidden className="h-2 w-10 rounded-full bg-gradient-to-r from-[#A77BDB] to-[#F0714F]" />A {name}</h2>
           {s?.publicDescription && s.publicDescription !== abertura ? (
             <p className="mt-3 max-w-2xl whitespace-pre-wrap text-ink-soft">{s.publicDescription}</p>
           ) : s?.publicDescription ? null : (
@@ -172,10 +182,10 @@ export default async function PublicInstitution({ params, searchParams }: { para
         {/* ——— Salas: faixas etárias e vaga ——— */}
         {rooms.length > 0 && (
           <section id="salas" className="mt-10 scroll-mt-16">
-            <h2 className="display flex items-center gap-3 text-2xl sm:text-3xl"><span aria-hidden className="h-2 w-10 rounded-full bg-gradient-to-r from-[#5DC98A] to-[#5B8DEF]" />Salas e idades</h2>
+            <h2 className="display flex items-center gap-3 text-3xl font-extrabold sm:text-4xl"><span aria-hidden className="h-2 w-10 rounded-full bg-gradient-to-r from-[#5DC98A] to-[#5B8DEF]" />Salas e idades</h2>
             <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {rooms.map((r) => (
-                <li key={r.id} className="group rounded-[1.5rem] p-5 shadow-lg transition hover:-translate-y-1 hover:shadow-xl" style={{ backgroundColor: ROOM_COLORS[r.color]?.hex ?? "#1B2333", color: ROOM_COLORS[r.color]?.ink ?? "#FFFFFF", boxShadow: `0 18px 40px -18px ${ROOM_COLORS[r.color]?.hex ?? "#1B2333"}` }}>
+                <li key={r.id} className="group rounded-[2rem] p-6 shadow-lg transition hover:-translate-y-1 hover:rotate-1 hover:shadow-xl" style={{ backgroundColor: ROOM_COLORS[r.color]?.hex ?? "#1B2333", color: ROOM_COLORS[r.color]?.ink ?? "#FFFFFF", boxShadow: `0 18px 40px -18px ${ROOM_COLORS[r.color]?.hex ?? "#1B2333"}` }}>
                   <p className="display text-xl font-bold">{r.name}</p>
                   <p className="mt-1 text-sm opacity-90">{ages(r.ageMinMonths, r.ageMaxMonths)}</p>
                   <p className="mt-0.5 text-xs opacity-80">Até {r.capacity} crianças</p>
@@ -188,7 +198,7 @@ export default async function PublicInstitution({ params, searchParams }: { para
         {/* ——— Galeria: todas as fotografias consentidas ——— */}
         {(galeria.length > 0 || heroPhotos.length > 0) && (
           <section id="fotos" className="mt-10 scroll-mt-16">
-            <h2 className="display flex items-center gap-3 text-2xl sm:text-3xl"><span aria-hidden className="h-2 w-10 rounded-full bg-gradient-to-r from-[#F0714F] to-[#F5B93A]" />Fotografias</h2>
+            <h2 className="display flex items-center gap-3 text-3xl font-extrabold sm:text-4xl"><span aria-hidden className="h-2 w-10 rounded-full bg-gradient-to-r from-[#F0714F] to-[#F5B93A]" />Fotografias</h2>
             <ul className="mt-4 columns-2 gap-3 sm:columns-3 [&>*]:mb-3">
               {[...galeria, ...heroPhotos].map((p) => (
                 <li key={p.id} className="break-inside-avoid">
