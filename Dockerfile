@@ -12,8 +12,12 @@ COPY . .
 RUN npm run build \
 # O servidor standalone não traz devDependencies (tsx) nem a pasta scripts/,
 # mas as operações de manutenção (migrações manuais, cópias, restauro) têm de
-# continuar possíveis DENTRO do container: empacotamos a CLI para um único
-# ficheiro (as dependências externas ficam no node_modules prunado do standalone).
+# continuar possíveis DENTRO do container. A CLI fica num único ficheiro e
+# DELIBERADAMENTE auto-contida — com TODAS as dependências dentro (drizzle-orm
+# incluído): o node_modules do standalone só traz o que o Next marca como
+# externo (pg, nodemailer) e não tem drizzle-orm, por isso a CLI não pode
+# depender de require externas que lhe faltem; a única coisa que fica fora é
+# pg-native (opcional do pg, nunca instalado e só tocado em modo nativo).
  && node_modules/.bin/esbuild scripts/tenants.ts --bundle --platform=node \
     --target=node22 --format=cjs --outfile=.next/ops.js
 
