@@ -321,6 +321,8 @@ export const settings = pgTable("settings", {
   address: text("address").notNull().default(""),
   taxId: text("tax_id").notNull().default(""),
   logoPath: text("logo_path"),
+  /** Fotografia de capa da página pública (a grande do topo). */
+  coverPath: text("cover_path"),
   accentColor: text("accent_color").notNull().default("#F0714F"),
   currency: text("currency").notNull().default("CVE"),
   timezone: text("timezone").notNull().default("Atlantic/Cape_Verde"),

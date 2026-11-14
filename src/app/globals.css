@@ -23,6 +23,15 @@
 }
 
 @layer components {
+  /* Título em letra arredondada e calorosa — só nas páginas públicas de creche. */
+  .display { font-family: "Baloo 2 Variable", "Inter Variable", Inter, system-ui, sans-serif; letter-spacing: -0.015em; }
+  /* Assinatura de cores: pontinhos com as cores das salas. */
+  .pontos-cores { display: inline-flex; gap: 5px; }
+  .pontos-cores i { display: block; height: 9px; width: 9px; border-radius: 999px; }
+  /* Colagem da capa: uma foto grande + duas à direita, cortadas pelo véu. */
+  .hero-collage { position: absolute; inset: 0; display: grid; grid-template-columns: 1.5fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; }
+  .hero-collage img { width: 100%; height: 100%; object-fit: cover; }
+  .hero-collage img:first-child { grid-row: 1 / span 2; }
   .btn { @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-btn px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[40px]; }
   .btn-primary { @apply btn bg-accent text-white hover:brightness-95 active:brightness-90; }
   .btn-secondary { @apply btn border border-accent bg-white text-accent hover:bg-accent/5; }

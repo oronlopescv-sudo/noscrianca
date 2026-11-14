@@ -55,6 +55,28 @@ export async function removeLogoAction(_p: S, fd: FormData): Promise<ActionResul
   });
 }
 
+export async function uploadCoverAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "settings.manage" });
+    const f = file(fd, "capa");
+    if (!f) fail("Escolha uma fotografia.");
+    const saved = await saveUpload(ctx.institution.id, "capa", f!, { kind: "image", maxMb: 8 });
+    await ctx.db.update(t.settings).set({ coverPath: saved.path }).where(eq(t.settings.id, 1));
+    await deleteTenantFile(ctx.institution.id, ctx.settings.coverPath);
+    await audit(ctx, "Capa da página pública atualizada");
+    return { ok: true, message: "Capa atualizada." };
+  });
+}
+
+export async function removeCoverAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "settings.manage" });
+    await ctx.db.update(t.settings).set({ coverPath: null }).where(eq(t.settings.id, 1));
+    await deleteTenantFile(ctx.institution.id, ctx.settings.coverPath);
+    return { ok: true, message: "Capa removida." };
+  });
+}
+
 // ======================= PÁGINA PÚBLICA =======================
 const MAX_PUBLIC_PHOTOS = 12;
 
