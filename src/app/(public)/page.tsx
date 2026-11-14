@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { central, c } from "@/db/central";
+import { getTenantDb, t } from "@/db/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +14,24 @@ const CORES_SALAS = [
 ];
 const COR_TEXTO = "#1B2333";
 
+type Cartao = { id: string; name: string; slug: string; city: string; logoSrc: string | null };
+
 export default async function Landing() {
   const institutions = await central().query.institutions.findMany({
     where: inArray(c.institutions.status, [...LISTED]),
-    columns: { name: true, slug: true, city: true },
+    columns: { id: true, name: true, slug: true, city: true },
     orderBy: (i, { asc }) => asc(i.name),
   });
+  // O cartão leva a marca da própria creche: o logo que a direção carregou.
+  const creches: Cartao[] = await Promise.all(institutions.map(async (i): Promise<Cartao> => {
+    try {
+      const db = await getTenantDb(i.id);
+      const settings = await db.query.settings.findFirst({ where: eq(t.settings.id, 1) });
+      return { ...i, logoSrc: settings?.logoPath ? `/c/${i.slug}/logo?v=${encodeURIComponent(settings.logoPath.slice(-24))}` : null };
+    } catch {
+      return { ...i, logoSrc: null };
+    }
+  }));
 
   return (
     <div className="bg-surface">
@@ -37,11 +50,11 @@ export default async function Landing() {
 
       <main className="mx-auto max-w-5xl px-4 py-12" id="topo">
         <h2 className="display text-2xl">Escolha a instituição</h2>
-        {institutions.length === 0 ? (
+        {creches.length === 0 ? (
           <p className="mt-8 rounded-card bg-white p-6 text-center text-ink-soft shadow-sm">Ainda não há instituições disponíveis.</p>
         ) : (
           <ul id="creches" className="mt-6 grid scroll-mt-6 gap-4 sm:grid-cols-2">
-            {institutions.map((i, idx) => {
+            {creches.map((i, idx) => {
               const cor = CORES_SALAS[idx % CORES_SALAS.length];
               // "Creche Lua Cheia" → "Lua": a inicial vem do nome próprio, não do género.
               const nomeProprio = i.name.replace(/^(creche|jardim de infância|jardim|escola|infância)\s*/i, "").trim() || i.name;
@@ -49,9 +62,16 @@ export default async function Landing() {
               return (
                 <li key={i.slug} className="card card-pad flex flex-col gap-4">
                   <Link href={`/creche/${i.slug}`} className="group flex items-center gap-4">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-base font-bold" style={{ backgroundColor: cor.hex, color: COR_TEXTO }} aria-hidden>
-                      {inicial}
-                    </span>
+                    {i.logoSrc
+                      ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={i.logoSrc} alt={`Logótipo de ${i.name}`} className="h-11 w-11 shrink-0 rounded-xl bg-white object-cover" />
+                      )
+                      : (
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-base font-bold" style={{ backgroundColor: cor.hex, color: COR_TEXTO }} aria-hidden>
+                          {inicial}
+                        </span>
+                      )}
                     <span>
                       <span className="block font-medium group-hover:text-accent">{i.name}</span>
                       {i.city && <span className="block text-xs text-ink-soft">{i.city}</span>}

@@ -84,10 +84,10 @@ export default async function ManagementDashboard({ params }: { params: Promise<
         </Card>
       )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Crianças ativas" value={kids} icon={<Baby size={18} />} hint={`${guardians} encarregados`} />
-        <Stat label="Presentes hoje" value={present} icon={<CalendarCheck size={18} />} tone="green" hint={`${absent} faltas`} />
-        <Stat label="Equipa" value={staff} icon={<Users size={18} />} tone="blue" />
-        {ctx.can("finance.view") && <Stat label="Por receber" value={money(open, cur)} icon={<Wallet size={18} />} tone="amber" hint={<Link href={`${ctx.base}/gestao/mensalidades`} className="link">Ver mensalidades</Link>} />}
+        {ctx.can("children.view") && <Stat label="Crianças ativas" value={kids} icon={<Baby size={18} />} hint={`${guardians} encarregados`} href={`${ctx.base}/gestao/criancas`} />}
+        {ctx.can("attendance.view") && <Stat label="Presentes hoje" value={present} icon={<CalendarCheck size={18} />} tone="green" hint={`${absent} faltas`} href={`${ctx.base}/gestao/presencas`} />}
+        {ctx.isDirector && <Stat label="Equipa" value={staff} icon={<Users size={18} />} tone="blue" href={`${ctx.base}/gestao/funcionarios`} />}
+        {ctx.can("finance.view") && <Stat label="Por receber" value={money(open, cur)} icon={<Wallet size={18} />} tone="amber" href={`${ctx.base}/gestao/mensalidades`} />}
       </div>
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         {ctx.can("finance.view") && (

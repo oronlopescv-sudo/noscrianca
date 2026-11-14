@@ -69,16 +69,23 @@ export function EmptyState({ icon, title, text, action }: { icon?: ReactNode; ti
   );
 }
 
-export function Stat({ label, value, hint, icon, tone = "accent" }: { label: string; value: ReactNode; hint?: ReactNode; icon?: ReactNode; tone?: Tone }) {
-  return (
-    <div className="card card-pad flex items-start gap-3">
+export function Stat({ label, value, hint, icon, tone = "accent", href }: { label: string; value: ReactNode; hint?: ReactNode; icon?: ReactNode; tone?: Tone; href?: string }) {
+  const corpo = (
+    <>
       {icon && <span className={clsx("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", TONES[tone])}>{icon}</span>}
       <div className="min-w-0">
         <p className="text-xs font-medium text-ink-soft">{label}</p>
         <p className="break-words text-lg font-semibold leading-tight sm:text-xl">{value}</p>
         {hint && <p className="mt-0.5 text-xs text-ink-soft">{hint}</p>}
       </div>
-    </div>
+    </>
+  );
+  if (!href) return <div className="card card-pad flex items-start gap-3">{corpo}</div>;
+  return (
+    <Link href={href} className="card card-pad flex items-start justify-between gap-3 transition hover:-translate-y-0.5 hover:shadow-md">
+      {corpo}
+      <span aria-hidden className="mt-0.5 text-xs font-medium text-accent">Ver</span>
+    </Link>
   );
 }
 
