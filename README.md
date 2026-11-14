@@ -57,9 +57,12 @@ npm run tenants:central-restore -- <f>  # repõe a central a partir de um fichei
 
 Em produção (imagem Docker) não há passos manuais de migração: **a cada arranque**, o
 servidor aplica sózinho as migrações da central e de todas as instituições ativas
-(idempotente — migrações já aplicadas não voltam a correr). Dentro do container, os
-comandos de manutenção equivalentes usam a CLI empacotada (`node ops.js …`), por exemplo
-`docker exec <app> node ops.js backup <slug>`.
+(idempotente — migrações já aplicadas não voltam a correr). Se alguma instituição
+falhar (ex.: base apagada à mão), o arranque volta a tentá-la só a ela a intervalos
+crescentes (1min, 2min, 4min, 8min e depois de 15 em 15min) — nunca bloqueia as
+outras nem o endurecimento do isolamento, que corre de qualquer forma. Dentro do
+container, os comandos de manutenção equivalentes usam a CLI empacotada
+(`node ops.js …`), por exemplo `docker exec <app> node ops.js backup <slug>`.
 
 As cópias automáticas são feitas diariamente (instituições **e central**) e apagadas após `BACKUP_RETENTION_DAYS` dias (14 por omissão). As cópias manuais e os ficheiros subidos pelo painel são mantidos.
 
