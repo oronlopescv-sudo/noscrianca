@@ -40,8 +40,12 @@ COPY --from=build --chown=nc:nc /app/.next/static ./.next/static
 COPY --from=build --chown=nc:nc /app/public ./public
 COPY --from=build --chown=nc:nc /app/drizzle ./drizzle
 COPY --from=build --chown=nc:nc /app/.next/ops.js ./ops.js
+COPY --from=build --chown=root:root /app/.next/BUILD_ID ./.next-BUILD_ID
+# O service worker recebe o seu cache com o BUILD_ID este deploy: chunks velhos não se acumulam.
+RUN sed -i "s/nc-static-dev/nc-static-$(cat .next-BUILD_ID)/" public/sw.js && rm .next-BUILD_ID
 USER nc
 VOLUME ["/app/storage", "/app/backups"]
 EXPOSE 3000
+# Liveness: o processo corre. /api/health/db (readiness) é que diz se a base de dados responde.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:'+(Number(process.env.PORT)||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server.js"]

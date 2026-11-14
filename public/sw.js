@@ -1,6 +1,9 @@
 // Service worker do NosCriança: instalação como app + página offline.
 // Nunca guarda em cache páginas com dados (são sempre pedidas ao servidor).
-const CACHE = "nc-static-v1";
+// «nc-static-dev» só serve em desenvolvimento: no Dockerfile, ao montar a
+// imagem, os marcadors são trocados por «nc-static-<BUILD_ID>» — cada deploy
+// recebe o seu nome de cache e os caches antigos são eliminados no activate.
+const CACHE = "nc-static-dev";
 const OFFLINE_URL = "/offline";
 
 self.addEventListener("install", (event) => {
@@ -23,7 +26,8 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(req).catch(() => caches.match(OFFLINE_URL)));
     return;
   }
-  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
+  if (url.pathname.startsWith("/_next/static/")) {
+    // Chunks com hash no nome: cache-first seguro (nunca mudam de conteúdo).
     event.respondWith(
       caches.match(req).then((hit) => hit || fetch(req).then((res) => {
         if (res.ok) {
@@ -32,6 +36,19 @@ self.addEventListener("fetch", (event) => {
         }
         return res;
       })),
+    );
+    return;
+  }
+  if (url.pathname.startsWith("/icons/") || url.pathname === "/manifest.webmanifest") {
+    // Sem hash de conteúdo: rede primeiro, cache só quando offline.
+    event.respondWith(
+      fetch(req).then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => caches.match(req).then((hit) => hit ?? caches.match(OFFLINE_URL))),
     );
   }
 });
