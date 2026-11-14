@@ -64,7 +64,7 @@ export default async function PublicInstitution({ params, searchParams }: { para
   const address = [s?.address || inst.address, inst.city].filter(Boolean).join(", ");
   const phone = s?.phone || inst.phone;
   const email = s?.email || inst.email;
-  const accent = /^#[0-9a-fA-F]{6}$/.test(s?.accentColor ?? "") ? s!.accentColor : "#F0714F";
+  const accent = /^#[0-9a-fA-F]{6}$/.test(s?.accentColor ?? "") ? s!.accentColor : "#C2410C";
   // Accent é escolhido pela diretora e pode ser claro: a cor do texto por cima
   // adapta-se (branco ou navy) para manter contraste legível.
   const onAccent = readableTextColorOn(accent);
@@ -136,7 +136,7 @@ export default async function PublicInstitution({ params, searchParams }: { para
               <h2 className="mb-3 text-lg">Salas e idades</h2>
               <ul className="grid gap-3 sm:grid-cols-2">
                 {rooms.map((r) => (
-                  <li key={r.id} className={`${ROOM_COLORS[r.color]?.bg ?? "bg-navy"} rounded-card p-4 text-white`}>
+                  <li key={r.id} className="rounded-card p-4" style={{ backgroundColor: ROOM_COLORS[r.color]?.hex ?? "#1B2333", color: ROOM_COLORS[r.color]?.ink ?? "#FFFFFF" }}>
                     <p className="font-semibold">{r.name}</p>
                     <p className="mt-1 text-sm opacity-90">{ages(r.ageMinMonths, r.ageMaxMonths)}</p>
                   </li>

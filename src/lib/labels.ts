@@ -40,12 +40,14 @@ export const DIARY_TYPES: Record<string, { label: string; tone: Tone }> = {
   PHOTO: { label: "Fotografia", tone: "accent" },
 };
 
-export const ROOM_COLORS: Record<string, { label: string; bg: string; hex: string }> = {
-  green: { label: "Verde", bg: "bg-room-green", hex: "#5DC98A" },
-  coral: { label: "Coral", bg: "bg-room-coral", hex: "#F0714F" },
-  blue: { label: "Azul", bg: "bg-room-blue", hex: "#5B8DEF" },
-  yellow: { label: "Amarelo", bg: "bg-room-yellow", hex: "#F5B93A" },
-  purple: { label: "Lilás", bg: "bg-room-purple", hex: "#A77BDB" },
+/** Cores fixas das salas/textos: a cor de texto é escolhida por contraste
+ * (todas as pastéis da paleta levam navy — branco não chegava a 3:1). */
+export const ROOM_COLORS: Record<string, { label: string; bg: string; hex: string; ink: string }> = {
+  green: { label: "Verde", bg: "bg-room-green", hex: "#5DC98A", ink: "#1B2333" },
+  coral: { label: "Coral", bg: "bg-room-coral", hex: "#F0714F", ink: "#1B2333" },
+  blue: { label: "Azul", bg: "bg-room-blue", hex: "#5B8DEF", ink: "#1B2333" },
+  yellow: { label: "Amarelo", bg: "bg-room-yellow", hex: "#F5B93A", ink: "#1B2333" },
+  purple: { label: "Lilás", bg: "bg-room-purple", hex: "#A77BDB", ink: "#1B2333" },
 };
 export const ROOM_COLOR_KEYS = Object.keys(ROOM_COLORS);
 

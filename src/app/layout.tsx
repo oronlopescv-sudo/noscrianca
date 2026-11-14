@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   metadataBase: new URL(env.appUrl),
   title: { default: "NosCriança", template: "%s · NosCriança" },
   description: "Plataforma de gestão de creches e jardins de infância.",
+  openGraph: {
+    type: "website",
+    siteName: "NosCriança",
+    title: "NosCriança",
+    description: "Plataforma de gestão de creches e jardins de infância.",
+  },
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icons/favicon.png", apple: "/icons/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "NosCriança", statusBarStyle: "default" },

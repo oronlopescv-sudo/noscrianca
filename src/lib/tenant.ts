@@ -9,6 +9,7 @@ import type { Role, Setting, User } from "@/db/tenant/schema";
 import { readSession } from "./auth";
 import { ALL_PERMISSIONS, DIRECTOR_KEY, type Permission } from "./permissions";
 import { ActionError } from "./result";
+import { readableTextColorOn } from "./contrast";
 
 export type PanelKind = "MANAGEMENT" | "CLASSROOM" | "GUARDIAN";
 
@@ -214,24 +215,33 @@ export function panelHome(ctx: TenantCtx): string {
   return `${ctx.base}/${ctx.panel === "GUARDIAN" ? "pais" : ctx.panel === "CLASSROOM" ? "sala" : "gestao"}`;
 }
 
+/** Cor de texto por cima do accent (triplet) — por contraste, para chips,
+ * bolhas e selos ficarem legíveis mesmo com accents claros. */
+function accentInkTriplet(hex: string): string {
+  const rgb = hexToRgbTriplet(hex).split(" ").map(Number);
+  const hexDe = (n: number) => Math.min(255, Math.max(0, n)).toString(16).padStart(2, "0");
+  return hexToRgbTriplet(readableTextColorOn(`#${rgb.map((n) => hexDe(n)).join("")}`));
+}
+
 export function hexToRgbTriplet(hex: string): string {
   const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-  return m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : "240 113 79";
+  return m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : "194 65 12";
 }
 
 /** Marca da instituição para páginas sem sessão (login, convite). */
 export const tenantBranding = cache(async (slug: string) => {
   const institution = await getInstitutionBySlug(slug);
-  if (!institution || !institutionUsable(institution.status)) return { institution, name: institution?.name ?? "", accent: "240 113 79", logoSrc: null as string | null };
+  if (!institution || !institutionUsable(institution.status)) return { institution, name: institution?.name ?? "", accent: "194 65 12", accentInk: "255 255 255", logoSrc: null as string | null };
   try {
     const db = await getTenantDb(institution.id);
     const s = await db.query.settings.findFirst({ where: eq(t.settings.id, 1) });
     return {
       institution, name: s?.name ?? institution.name, accent: hexToRgbTriplet(s?.accentColor ?? ""),
+      accentInk: accentInkTriplet(s?.accentColor ?? ""),
       logoSrc: s?.logoPath ? `/c/${slug}/logo?v=${encodeURIComponent(s.logoPath.slice(-24))}` : null,
     };
   } catch {
-    return { institution, name: institution.name, accent: "240 113 79", logoSrc: null as string | null };
+    return { institution, name: institution.name, accent: "194 65 12", accentInk: "255 255 255", logoSrc: null as string | null };
   }
 });
 
