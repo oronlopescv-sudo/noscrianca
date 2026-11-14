@@ -215,10 +215,19 @@ export async function linkGuardianAction(_p: S, fd: FormData): Promise<ActionRes
       if (!(await ctx.db.query.guardians.findFirst({ where: eq(t.guardians.id, guardianId) }))) fail("Encarregado não encontrado.");
     } else {
       const d = z.object({ name: personName, email, phone: z.string().trim().max(40) }).parse({ name: str(fd, "name"), email: str(fd, "email"), phone: str(fd, "phone") });
-      const user = await createInvitedUser(ctx, { ...d, kind: "GUARDIAN" });
-      const [g] = await ctx.db.insert(t.guardians).values({ userId: user.id }).returning();
-      guardianId = g.id;
-      invite = await sendInvite(ctx, user);
+      // Um encarregado com vários filhos já tem conta: reutiliza-a em vez de falhar.
+      const existente = await ctx.db.query.users.findFirst({ where: eq(t.users.email, d.email) });
+      if (existente) {
+        if (existente.kind !== "GUARDIAN") fail("Este email já pertence a um funcionário desta creche.");
+        let g = await ctx.db.query.guardians.findFirst({ where: eq(t.guardians.userId, existente.id) });
+        if (!g) [g] = await ctx.db.insert(t.guardians).values({ userId: existente.id }).returning();
+        guardianId = g!.id;
+      } else {
+        const user = await createInvitedUser(ctx, { ...d, kind: "GUARDIAN" });
+        const [g] = await ctx.db.insert(t.guardians).values({ userId: user.id }).returning();
+        guardianId = g.id;
+        invite = await sendInvite(ctx, user);
+      }
     }
     const exists = await ctx.db.query.childGuardians.findFirst({ where: and(eq(t.childGuardians.childId, childId), eq(t.childGuardians.guardianId, guardianId)) });
     if (exists) fail("Este encarregado já está associado a esta criança.");
