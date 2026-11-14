@@ -1,3 +1,4 @@
+import { ILHAS } from "@/lib/islands";
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { ActionForm, Submit } from "@/components/ui/client";
@@ -32,7 +33,13 @@ export default async function SignupRequest({ searchParams }: { searchParams: Pr
               <Field label="Telefone"><input name="phone" type="tel" className="input" autoComplete="tel" /></Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Cidade / ilha"><input name="city" className="input" maxLength={80} /></Field>
+              <Field label="Ilha">
+                <select name="island" className="input" defaultValue="" required>
+                  <option value="" disabled>Escolha a ilha</option>
+                  {ILHAS.map((ilha) => <option key={ilha} value={ilha}>{ilha}</option>)}
+                </select>
+              </Field>
+              <Field label="Cidade / localidade"><input name="city" className="input" maxLength={80} /></Field>
               <Field label="N.º aproximado de crianças"><input name="childrenEstimate" inputMode="numeric" pattern="\d*" className="input" maxLength={5} /></Field>
             </div>
             <Field label="Mensagem (opcional)"><textarea name="message" className="input" maxLength={1000} /></Field>

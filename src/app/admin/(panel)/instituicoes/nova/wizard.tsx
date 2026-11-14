@@ -1,3 +1,4 @@
+import { ILHAS } from "@/lib/islands";
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -8,7 +9,7 @@ import { Field } from "@/components/ui/kit";
 import { checkSlugAction, createInstitutionAction } from "../../../actions";
 
 type PlanOpt = { id: string; name: string; description: string; monthly: string; yearly: string };
-type Prefill = { requestId?: string; name?: string; email?: string; phone?: string; city?: string; directorName?: string };
+type Prefill = { requestId?: string; name?: string; email?: string; phone?: string; island?: string; city?: string; directorName?: string };
 
 function slugify(name: string) {
   return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").replace(/^[^a-z]+/, "").slice(0, 30).replace(/-+$/, "");
@@ -89,7 +90,13 @@ export function NewInstitutionWizard({ plans, trialDays, prefill, appUrl }: { pl
           </div>
           <Field label="Morada"><input name="address" className="input" maxLength={200} /></Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Cidade / ilha"><input name="city" className="input" defaultValue={prefill.city ?? ""} maxLength={80} /></Field>
+            <Field label="Ilha">
+              <select name="island" className="input" defaultValue={prefill.island ?? ""}>
+                <option value="">—</option>
+                {ILHAS.map((ilha) => <option key={ilha} value={ilha}>{ilha}</option>)}
+              </select>
+            </Field>
+            <Field label="Cidade / localidade"><input name="city" className="input" defaultValue={prefill.city ?? ""} maxLength={80} /></Field>
             <Field label="Moeda">
               <select name="currency" className="input" defaultValue="CVE">
                 <option value="CVE">CVE — Escudo cabo-verdiano</option><option value="EUR">EUR — Euro</option><option value="USD">USD — Dólar</option>

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ILHAS } from "@/lib/islands";
 
 export type CartaoCreche = {
   slug: string;
   name: string;
+  island: string;
   city: string;
   coverSrc: string | null;
   logoSrc: string | null;
@@ -20,11 +22,14 @@ const ORANGE = "#F0714F";
 /** Pesquisa por nome ou localização. Filtra no cliente, sem novo pedido ao servidor. */
 export function CrecheSearch({ items }: { items: CartaoCreche[] }) {
   const [q, setQ] = useState("");
+  const [ilha, setIlha] = useState("");
   const visiveis = useMemo(() => {
     const termo = q.trim().toLowerCase();
-    if (!termo) return items;
-    return items.filter((i) => `${i.name} ${i.city}`.toLowerCase().includes(termo));
-  }, [items, q]);
+    return items.filter((i) =>
+      (!ilha || i.island === ilha) &&
+      (!termo || `${i.name} ${i.island} ${i.city}`.toLowerCase().includes(termo)),
+    );
+  }, [items, q, ilha]);
 
   return (
     <>
@@ -40,6 +45,16 @@ export function CrecheSearch({ items }: { items: CartaoCreche[] }) {
         />
         <button type="submit" className="rounded-full px-5 py-2 text-sm font-semibold text-white" style={{ backgroundColor: ORANGE }}>Pesquisar</button>
       </form>
+
+      <div className="-mt-1 mx-4 mt-4">
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <span className="shrink-0 font-semibold" style={{ color: BLUE }}>Ilha</span>
+          <select value={ilha} onChange={(e) => setIlha(e.target.value)} aria-label="Filtrar por ilha" className="min-w-0 flex-1 rounded-full bg-white px-4 py-2 text-sm shadow-sm outline-none">
+            <option value="">Todas as ilhas</option>
+            {ILHAS.map((i) => <option key={i} value={i}>{i}</option>)}
+          </select>
+        </label>
+      </div>
 
       <div className="mt-8 flex items-center justify-between px-5">
         <h2 className="flex items-center gap-2 text-lg font-bold" style={{ color: BLUE }}>
@@ -65,7 +80,7 @@ export function CrecheSearch({ items }: { items: CartaoCreche[] }) {
               </div>
               <div className="min-w-0 flex-1 py-1">
                 <h3 className="truncate text-base font-bold" style={{ color: NAVY }}>{i.name}</h3>
-                {i.city && <p className="mt-1 text-sm text-slate-500">📍 {i.city}</p>}
+                {(i.island || i.city) && <p className="mt-1 text-sm text-slate-500">📍 {[i.island, i.city].filter(Boolean).join(" · ")}</p>}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link href={`/creche/${i.slug}`} className="rounded-full border px-4 py-1.5 text-sm font-semibold" style={{ borderColor: BLUE, color: BLUE }}>Conhecer</Link>
                   <Link href={`/c/${i.slug}/entrar`} className="rounded-full px-4 py-1.5 text-sm font-semibold text-white" style={{ backgroundColor: ORANGE }}>Entrar</Link>

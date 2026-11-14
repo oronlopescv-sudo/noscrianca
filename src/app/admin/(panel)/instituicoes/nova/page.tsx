@@ -26,7 +26,7 @@ export default async function NewInstitution({ searchParams }: { searchParams: P
         <NewInstitutionWizard
           appUrl={env.appUrl} trialDays={settings.trialDays}
           plans={plans.map((p) => ({ id: p.id, name: p.name, description: p.description, monthly: money(p.priceMonthlyCents, settings.billingCurrency), yearly: money(p.priceYearlyCents, settings.billingCurrency) }))}
-          prefill={request ? { requestId: request.id, name: request.institutionName, email: request.email, phone: request.phone, city: request.city, directorName: request.contactName } : {}}
+          prefill={request ? { requestId: request.id, name: request.institutionName, email: request.email, phone: request.phone, island: request.island, city: request.city, directorName: request.contactName } : {}}
         />
       )}
     </>

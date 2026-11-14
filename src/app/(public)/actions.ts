@@ -1,3 +1,4 @@
+import { ilhaValida } from "@/lib/islands";
 "use server";
 
 import { z } from "zod";
@@ -19,6 +20,7 @@ const signupSchema = z.object({
   contactName: z.string().min(2, "Indique o seu nome.").max(120),
   email: z.string().email("Email inválido.").max(160),
   phone: telefone,
+  island: z.string().max(40),
   city: z.string().max(80),
   childrenEstimate: z.string().regex(/^\d{0,5}$/, "Número de crianças inválido."),
   message: z.string().max(1000),
@@ -37,7 +39,7 @@ export async function requestSignupAction(_p: ActionResult | null, fd: FormData)
     if (n >= 50) fail("Demasiados pedidos. Tente novamente mais tarde.");
     const d = signupSchema.parse({
       institutionName: str(fd, "institutionName"), contactName: str(fd, "contactName"), email: str(fd, "email").toLowerCase(),
-      phone: str(fd, "phone"), city: str(fd, "city"), childrenEstimate: str(fd, "childrenEstimate"), message: str(fd, "message"),
+      phone: str(fd, "phone"), island: ilhaValida(str(fd, "island")), city: str(fd, "city"), childrenEstimate: str(fd, "childrenEstimate"), message: str(fd, "message"),
     });
     await central().insert(c.signupRequests).values({ ...d, childrenEstimate: d.childrenEstimate ? Number(d.childrenEstimate) : null });
     return { ok: true, redirect: "/pedir-adesao?enviado=1" };

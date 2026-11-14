@@ -26,8 +26,8 @@
   /* Título em letra arredondada e calorosa — só nas páginas públicas de creche. */
   .display { font-family: "Baloo 2 Variable", "Inter Variable", Inter, system-ui, sans-serif; letter-spacing: -0.015em; }
   /* Assinatura de cores: pontinhos com as cores das salas. */
-  .pontos-cores { display: inline-flex; gap: 5px; }
-  .pontos-cores i { display: block; height: 9px; width: 9px; border-radius: 999px; }
+  .pontos-cores { display: inline-flex; gap: 8px; }
+  .pontos-cores i { display: block; height: 16px; width: 16px; border-radius: 999px; }
   /* Colagem da capa: uma foto grande + duas à direita, cortadas pelo véu. */
   .hero-collage { position: absolute; inset: 0; display: grid; grid-template-columns: 1.5fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; }
   .hero-collage img { width: 100%; height: 100%; object-fit: cover; }

@@ -68,6 +68,7 @@ const institutionSchema = z.object({
   email: z.union([email, z.literal("")]),
   phone: z.string().trim().max(40),
   address: z.string().trim().max(200),
+  island: z.string().trim().max(40),
   city: z.string().trim().max(80),
   currency: z.string().refine((v) => CURRENCIES.includes(v), "Moeda inválida."),
   directorName: safeName("Indique o nome do diretor."),
@@ -80,7 +81,7 @@ const institutionSchema = z.object({
 export async function createInstitutionAction(_p: S, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     const admin = await platformAction();
-    const d = institutionSchema.parse(Object.fromEntries(["name", "slug", "email", "phone", "address", "city", "currency", "directorName", "directorEmail", "directorPhone", "planId", "billingCycle"].map((k) => [k, str(fd, k)])));
+    const d = institutionSchema.parse(Object.fromEntries(["name", "slug", "email", "phone", "address", "island", "city", "currency", "directorName", "directorEmail", "directorPhone", "planId", "billingCycle"].map((k) => [k, str(fd, k)])));
     const plan = await central().query.plans.findFirst({ where: and(eq(c.plans.id, d.planId), eq(c.plans.active, true)) });
     if (!plan) fail("Plano inválido.");
     const settings = await getPlatformSettings();
@@ -128,10 +129,10 @@ export async function updateInstitutionAction(_p: S, fd: FormData): Promise<Acti
     const d = z.object({
       name: safeName("Indique o nome."),
       email: z.union([email, z.literal("")]),
-      phone: z.string().trim().max(40), address: z.string().trim().max(200), city: z.string().trim().max(80),
+      phone: z.string().trim().max(40), address: z.string().trim().max(200), island: z.string().trim().max(40), city: z.string().trim().max(80),
       planId: z.string().min(1, "Escolha um plano."), billingCycle: z.enum(["MONTHLY", "YEARLY"]),
       maxDirectors: z.coerce.number().int().min(1, "Mínimo de 1 diretor.").max(10),
-    }).parse(Object.fromEntries(["name", "email", "phone", "address", "city", "planId", "billingCycle", "maxDirectors"].map((k) => [k, str(fd, k)])));
+    }).parse(Object.fromEntries(["name", "email", "phone", "address", "island", "city", "planId", "billingCycle", "maxDirectors"].map((k) => [k, str(fd, k)])));
     const [row] = await central().update(c.institutions).set(d).where(eq(c.institutions.id, id)).returning();
     if (!row) fail("Instituição não encontrada.");
     await platformAudit(admin, "Instituição editada", { entity: "institution", entityId: id, institutionId: id });

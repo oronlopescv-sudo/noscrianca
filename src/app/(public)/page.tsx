@@ -19,7 +19,7 @@ const YELLOW = "#F5B93A";
 export default async function Landing() {
   const institutions = await central().query.institutions.findMany({
     where: inArray(c.institutions.status, [...LISTED]),
-    columns: { id: true, name: true, slug: true, city: true },
+    columns: { id: true, name: true, slug: true, island: true, city: true },
     orderBy: (i, { asc }) => asc(i.name),
   });
 
@@ -35,6 +35,7 @@ export default async function Landing() {
       return {
         slug: i.slug,
         name: i.name,
+        island: i.island ?? "",
         city: i.city ?? "",
         coverSrc: s?.coverPath ? `/c/${i.slug}/capa?v=${encodeURIComponent(s.coverPath.slice(-24))}` : null,
         logoSrc: s?.logoPath ? `/c/${i.slug}/logo?v=${encodeURIComponent(s.logoPath.slice(-24))}` : null,
@@ -42,7 +43,8 @@ export default async function Landing() {
         cor,
       };
     } catch {
-      return { slug: i.slug, name: i.name, city: i.city ?? "", coverSrc: null, logoSrc: null, inicial, cor };
+      return { slug: i.slug, name: i.name, island: i.island ?? "",
+        city: i.city ?? "", coverSrc: null, logoSrc: null, inicial, cor };
     }
   }));
 
@@ -60,6 +62,7 @@ export default async function Landing() {
       </header>
 
       {/* Faixa de destaque */}
+      <img src="/hero-criancas.png" alt="Crianças sorridentes numa creche de Cabo Verde" className="block w-full object-cover" />
       <section className="-mt-6 rounded-b-[2rem] px-6 pb-14 pt-8 text-white" style={{ backgroundColor: BLUE }}>
         <div className="pontos-cores" aria-hidden>{CORES_SALAS.map((k, i) => <i key={i} style={{ backgroundColor: k }} />)}</div>
         <h1 className="mt-3 text-3xl font-extrabold leading-tight">Encontre a<br />sua Creche</h1>
