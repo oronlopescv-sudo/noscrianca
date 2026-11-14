@@ -21,15 +21,15 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
       {children}
-      <footer className="border-t border-line bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-7 text-sm text-ink-soft sm:flex-row">
+      <footer className="border-t border-line bg-white pb-24 sm:pb-0">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-7 text-sm text-ink-soft sm:flex-row">
           <p className="flex items-center gap-2.5">
             <span className="pontos-cores" aria-hidden>
               {["#5DC98A", "#F0714F", "#5B8DEF", "#F5B93A", "#A77BDB"].map((c) => <i key={c} style={{ backgroundColor: c }} />)}
             </span>
             NosCriança — Gestão de creches e jardins de infância
           </p>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 font-medium">
             <Link href="/#creches" className="hover:text-accent">Escolher creche</Link>
             <Link href="/pedir-adesao" className="hover:text-accent">Pedir adesão</Link>
             <Link href="/admin" className="hover:text-accent">Administração</Link>
