@@ -84,7 +84,7 @@ export default async function MonthlyCalendar({ params, searchParams }: { params
 
   return (
     <>
-      <PageHeader title="Calendário mensal" subtitle={`${MONTHS[m - 1]} de ${y}`} />
+      <PageHeader title="Calendário do mês" subtitle={`${MONTHS[m - 1]} de ${y}`} />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <Link href={`${base}?mes=${prev}`} className="btn btn-secondary btn-sm">← {MONTHS[Number(prev.split("-")[1]) - 1]}</Link>

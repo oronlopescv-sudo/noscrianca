@@ -9,23 +9,24 @@ const ic = (node: ReactNode) => node;
 
 export function managementNav(ctx: TenantCtx): NavItem[] {
   const b = ctx.base;
-  const items: NavItem[] = [{ href: `${b}/gestao`, label: "Painel", icon: ic(<LayoutDashboard size={18} />), exact: true, section: "Geral" }];
+  const items: NavItem[] = [{ href: `${b}/gestao`, label: "Painel", icon: ic(<LayoutDashboard size={18} />), exact: true, section: "Dia a dia" }];
   const add = (ok: boolean, href: string, label: string, icon: ReactNode, section: string) => { if (ok) items.push({ href, label, icon, section }); };
+  // O que se usa todos os dias fica no topo; o resto agrupa com nome do assunto.
+  add(ctx.can("children.view"), `${b}/gestao/criancas`, "Crianças", ic(<Baby size={18} />), "Dia a dia");
   add(ctx.can("attendance.view"), `${b}/gestao/presencas`, "Presenças", ic(<CalendarCheck size={18} />), "Dia a dia");
-  add(ctx.can("attendance.view") || ctx.can("finance.view"), `${b}/gestao/calendario`, "Calendário mensal", ic(<CalendarDays size={18} />), "Dia a dia");
   add(ctx.can("messages.reply"), `${b}/gestao/mensagens`, "Mensagens", ic(<MessageSquare size={18} />), "Dia a dia");
-  add(ctx.can("children.view"), `${b}/gestao/criancas`, "Crianças", ic(<Baby size={18} />), "Famílias");
+  add(ctx.can("finance.view"), `${b}/gestao/mensalidades`, "Mensalidades", ic(<Wallet size={18} />), "Dia a dia");
+  add(ctx.can("announcements.manage"), `${b}/gestao/comunicados`, "Comunicados", ic(<Megaphone size={18} />), "Dia a dia");
+  add(ctx.can("announcements.manage"), `${b}/gestao/agenda`, "Agenda", ic(<CalendarDays size={18} />), "Dia a dia");
   add(ctx.can("children.view"), `${b}/gestao/encarregados`, "Encarregados", ic(<Users size={18} />), "Famílias");
-  add(ctx.can("children.manage"), `${b}/gestao/inscricoes`, "Pedidos de inscrição", ic(<ClipboardList size={18} />), "Famílias");
-  add(ctx.can("children.view"), `${b}/gestao/turmas`, "Turmas", ic(<School size={18} />), "Famílias");
+  add(ctx.can("children.manage"), `${b}/gestao/inscricoes`, "Pedidos de vaga", ic(<ClipboardList size={18} />), "Famílias");
+  add(ctx.can("children.view") && ctx.can("classrooms.manage"), `${b}/gestao/turmas`, "Turmas e salas", ic(<School size={18} />), "Famílias");
   add(ctx.can("employees.manage"), `${b}/gestao/funcionarios`, "Funcionários", ic(<Briefcase size={18} />), "Equipa");
   add(ctx.can("roles.manage"), `${b}/gestao/cargos`, "Cargos e permissões", ic(<UserCog size={18} />), "Equipa");
-  add(ctx.can("finance.view"), `${b}/gestao/mensalidades`, "Mensalidades", ic(<Wallet size={18} />), "Financeiro");
+  add(ctx.can("attendance.view") || ctx.can("finance.view"), `${b}/gestao/calendario`, "Calendário do mês", ic(<ClipboardList size={18} />), "Financeiro");
   add(ctx.can("payroll.manage"), `${b}/gestao/salarios`, "Salários", ic(<Banknote size={18} />), "Financeiro");
   add(ctx.can("reports.view"), `${b}/gestao/relatorios`, "Relatórios", ic(<FileBarChart size={18} />), "Financeiro");
-  add(ctx.can("announcements.manage"), `${b}/gestao/agenda`, "Agenda", ic(<CalendarDays size={18} />), "Comunicação");
-  add(ctx.can("announcements.manage"), `${b}/gestao/comunicados`, "Comunicados", ic(<Megaphone size={18} />), "Comunicação");
-  add(ctx.can("settings.manage"), `${b}/gestao/definicoes`, "Definições", ic(<Settings size={18} />), "Sistema");
+  add(ctx.can("settings.manage"), `${b}/gestao/definicoes`, "Definições da instituição", ic(<Settings size={18} />), "Sistema");
   add(ctx.can("audit.view"), `${b}/gestao/auditoria`, "Auditoria", ic(<History size={18} />), "Sistema");
   return items;
 }
@@ -35,7 +36,7 @@ export function classroomNav(ctx: TenantCtx): NavItem[] {
   const items: NavItem[] = [{ href: `${b}/sala`, label: "Presenças", icon: ic(<CalendarCheck size={20} />), exact: true }];
   if (ctx.can("diary.record") || ctx.can("diary.view")) items.push({ href: `${b}/sala/diario`, label: "Diário", icon: ic(<BookOpen size={20} />) });
   if (ctx.can("messages.reply")) items.push({ href: `${b}/sala/mensagens`, label: "Mensagens", icon: ic(<MessageSquare size={20} />) });
-  if (ctx.can("announcements.manage") || ctx.can("messages.reply")) items.push({ href: `${b}/sala/comunicados`, label: "Avisos", icon: ic(<Megaphone size={20} />) });
+  if (ctx.can("announcements.manage") || ctx.can("messages.reply")) items.push({ href: `${b}/sala/comunicados`, label: "Comunicados", icon: ic(<Megaphone size={20} />) });
   items.push({ href: `${b}/perfil`, label: "Perfil", icon: ic(<UserRound size={20} />) });
   return items;
 }
