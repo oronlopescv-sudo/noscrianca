@@ -1,8 +1,13 @@
 // BD CENTRAL — instituições, utilizadores da plataforma, planos, faturas do
 // SaaS, registo das BDs dos tenants, jobs de provisionamento e sessões.
 import { relations, sql } from "drizzle-orm";
-import { bigint, boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, customType, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createId } from "@paralleldrive/cuid2";
+
+/** Conteúdo binário em coluna (ficheiros espelhados). */
+const bytea = customType<{ data: Buffer }>({
+  dataType() { return "bytea"; },
+});
 
 const id = () => text("id").primaryKey().$defaultFn(() => createId());
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -199,6 +204,24 @@ export const schedulerLocks = pgTable("scheduler_locks", {
   key: text("key").primaryKey(),
   runAt: ts("run_at").notNull(),
 });
+
+/**
+ * Espelho dos ficheiros enviados (logo, capa, fotografias, documentos) e das
+ * cópias de segurança recentes, NA central: o disco do container pode ser
+ * limpo num redeploy — a base de dados não. Nas leituras, o disco continua
+ * primeiro; quando não tem o ficheiro, a base fornece e repõe no disco.
+ */
+export const dbFiles = pgTable("db_files", {
+  institutionId: text("institution_id").notNull(),
+  raiz: text("raiz").notNull().default("storage"),
+  path: text("path").notNull(),
+  mime: text("mime").notNull().default("application/octet-stream"),
+  bytes: bytea("bytes").notNull(),
+  size: integer("size").notNull(),
+  updatedAt: updatedAt(),
+}, (x) => ({
+  pk: primaryKey({ columns: [x.institutionId, x.raiz, x.path] }),
+}));
 
 export const institutionsRelations = relations(institutions, ({ one, many }) => ({
   plan: one(plans, { fields: [institutions.planId], references: [plans.id] }),
