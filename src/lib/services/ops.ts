@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, readdir, stat, unlink } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
-import { and, count, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, like, lt } from "drizzle-orm";
 import { central, centralPool, closeCentral, c } from "@/db/central";
 import { migrateTenant } from "@/db/migrate";
 import { dropTenantPool, getTenantDb, t, tenantConnectionString } from "@/db/tenant";
@@ -45,6 +45,41 @@ function platformFolder() {
 export type CentralBackupInfo = { fileName: string; sizeBytes: number; createdAt: Date };
 
 /** Cópia de segurança da base central (pg_dump, formato custom). */
+/** Cópias vão TAMBÉM para a base central (últimas 3 por pasta): um
+ * redeploy pode limpar /app/backups — a base de dados não se limpa. */
+async function copiaNaCentral(instId: string, rel: string, full: string) {
+  const dados = await readFile(full);
+  await central().insert(c.dbFiles).values({
+    institutionId: instId, raiz: "backups", path: rel,
+    mime: "application/octet-stream", bytes: dados, size: dados.length,
+  }).onConflictDoUpdate({
+    target: [c.dbFiles.institutionId, c.dbFiles.raiz, c.dbFiles.path],
+    set: { mime: "application/octet-stream", bytes: dados, size: dados.length, updatedAt: new Date() },
+  });
+  const pasta = path.posix.dirname(rel);
+  const paraFora = await central().select({ institutionId: c.dbFiles.institutionId, path: c.dbFiles.path })
+    .from(c.dbFiles)
+    .where(and(eq(c.dbFiles.institutionId, instId), eq(c.dbFiles.raiz, "backups"), like(c.dbFiles.path, `${pasta}/%`)))
+    .orderBy(desc(c.dbFiles.updatedAt))
+    .offset(3);
+  for (const fora of paraFora) {
+    await central().delete(c.dbFiles)
+      .where(and(eq(c.dbFiles.institutionId, fora.institutionId), eq(c.dbFiles.raiz, "backups"), eq(c.dbFiles.path, fora.path)));
+  }
+}
+
+/** Põe no disco uma cópia que só existe na base (antes de restaurar). */
+async function reporCopiaSeFaltar(instId: string, rel: string, destino: string): Promise<boolean> {
+  const linha = await central().query.dbFiles.findFirst({
+    where: and(eq(c.dbFiles.institutionId, instId), eq(c.dbFiles.raiz, "backups"), eq(c.dbFiles.path, rel)),
+  });
+  if (!linha) return false;
+  await mkdir(path.dirname(destino), { recursive: true });
+  await unlink(destino).catch(() => {});
+  await import("node:fs/promises").then(({ writeFile }) => writeFile(destino, Buffer.from(linha.bytes)));
+  return true;
+}
+
 export async function backupCentral() {
   const folder = platformFolder();
   await mkdir(folder, { recursive: true });
@@ -58,6 +93,8 @@ export async function backupCentral() {
     throw e;
   }
   const size = (await stat(full)).size;
+  await copiaNaCentral("central", `platform/${fileName}`, full).catch((e) =>
+    console.error("[backup] espelho na central:", (e as Error).message));
   return { fileName, sizeBytes: size, createdAt: new Date() };
 }
 
@@ -84,7 +121,10 @@ export function centralBackupPath(fileName: string): string {
  */
 export async function restoreCentralBackup(fileName: string) {
   const full = centralBackupPath(fileName);
-  await stat(full).catch(() => { throw new Error("O ficheiro de cópia não existe no servidor."); });
+  await stat(full).catch(async () => {
+    const repostado = await reporCopiaSeFaltar("central", `platform/${path.basename(fileName)}`, full);
+    if (!repostado) throw new Error("O ficheiro de cópia não existe no servidor nem na base central.");
+  });
   // Fecha a ligação da central (se houver) para o pg_restore não disputar locks.
   await closeCentral();
   const u = new URL(env.centralUrl);
@@ -157,6 +197,8 @@ export async function saveInstitutionBackupUpload(institutionId: string, origina
   if (!inst) throw new Error("Instituição não encontrada.");
   const saved = await savePgDumpUpload(backupFolder(inst.slug), originalName, body);
   try {
+    await copiaNaCentral(inst.id, `${inst.slug}/${saved.fileName}`, saved.path).catch((e) =>
+      console.error("[backup] espelho na central:", (e as Error).message));
     const [rec] = await central().insert(c.backupRecords).values({
       institutionId: inst.id, fileName: saved.fileName, sizeBytes: saved.sizeBytes, manual: true, status: "DONE",
     }).returning();
@@ -171,13 +213,24 @@ export async function saveInstitutionBackupUpload(institutionId: string, origina
 /** Guarda uma cópia subida DA CENTRAL (sem registo na própria central — é a BD que está a ser copiada). */
 export async function saveCentralBackupUpload(originalName: string, body: ReadableStream) {
   const saved = await savePgDumpUpload(platformFolder(), originalName, body);
+  await copiaNaCentral("central", `platform/${saved.fileName}`, saved.path).catch((e) =>
+    console.error("[backup] espelho na central:", (e as Error).message));
   return saved;
 }
 
 /** Corpo de resposta com um ficheiro do disco (descarregar cópia). */
 export async function downloadBackupResponse(fullPath: string, fileName: string): Promise<Response> {
   const st = await stat(fullPath).catch(() => null);
-  if (!st?.isFile()) throw new Error("O ficheiro de cópia já não está no servidor (retenção do disco).");
+  if (!st?.isFile()) {
+    // O disco perdeu a cópia: tentar a base (repor em disco e servir).
+    const rel = path.relative(env.backupDir, fullPath);
+    const instId = rel.startsWith("platform") ? "central" : null;
+    if (instId) {
+      const repostado = await reporCopiaSeFaltar(instId, rel.replace(/\\/g, "/"), fullPath);
+      if (repostado) return downloadBackupResponse(fullPath, fileName);
+    }
+    throw new Error("O ficheiro de cópia já não está no servidor (retenção do disco).");
+  }
   const stream = Readable.toWeb(createReadStream(fullPath)) as unknown as ReadableStream;
   return new Response(stream, {
     headers: {
@@ -204,6 +257,8 @@ export async function backupInstitution(institutionId: string, manual: boolean) 
     const size = (await stat(full)).size;
     await central().update(c.backupRecords).set({ status: "DONE", sizeBytes: size }).where(eq(c.backupRecords.id, rec.id));
     await central().update(c.institutions).set({ lastBackupAt: new Date() }).where(eq(c.institutions.id, institutionId));
+    await copiaNaCentral(institutionId, `${inst.slug}/${fileName}`, full).catch((e) =>
+      console.error("[backup] espelho na central:", (e as Error).message));
     return { ...rec, status: "DONE" as const, sizeBytes: size };
   } catch (e) {
     await central().update(c.backupRecords).set({ status: "FAILED", error: (e as Error).message }).where(eq(c.backupRecords.id, rec.id));
@@ -219,7 +274,10 @@ export async function restoreInstitution(institutionId: string, backupId: string
   const inst = await central().query.institutions.findFirst({ where: eq(c.institutions.id, institutionId) });
   if (!rec || !inst) throw new Error("Backup não encontrado para esta instituição.");
   const full = path.join(backupFolder(inst.slug), path.basename(rec.fileName));
-  await stat(full).catch(() => { throw new Error("O ficheiro de backup já não existe no servidor."); });
+  await stat(full).catch(async () => {
+    const repostado = await reporCopiaSeFaltar(institutionId, `${inst.slug}/${path.basename(rec.fileName)}`, full);
+    if (!repostado) throw new Error("O ficheiro de backup já não existe no servidor nem na base central.");
+  });
   const url = await tenantConnectionString(institutionId);
   await dropTenantPool(institutionId);
   await runTool("pg_restore", ["--clean", "--if-exists", "--no-owner", "--no-privileges", "--single-transaction", `--dbname=${new URL(url).pathname.slice(1)}`, full], url);

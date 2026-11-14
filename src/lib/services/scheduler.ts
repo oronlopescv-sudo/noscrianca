@@ -1,6 +1,7 @@
 import { eq, lt } from "drizzle-orm";
 import { central, c } from "@/db/central";
 import { migrateTenant } from "@/db/migrate";
+import { repostarFicheiros } from "@/lib/storage";
 import { getTenantDb, tenantConnectionString } from "@/db/tenant";
 import { todayIn } from "@/lib/format";
 import { bootstrapCentral } from "./bootstrap";
@@ -15,6 +16,7 @@ const g = globalThis as unknown as {
   __ncScheduler?: boolean; __ncTick?: boolean; __ncOnceFails?: Map<string, number>;
   __ncBootMigrado?: boolean; __ncBootTentado?: boolean;
   __ncBootFalhas?: Map<string, { tentou: number; proxima: number }>;
+  __ncFicheirosRepostos?: boolean;
 };
 const MAX_RETRIES = 10;
 
@@ -130,6 +132,13 @@ async function tick() {
       const falhas = g.__ncBootFalhas;
       const venceu = !falhas || [...falhas.values()].some((f) => Date.now() >= f.proxima);
       if (venceu) await migrateTenantsAtBoot();
+    }
+    // Ficheiros que só existem na base (logo, capa, fotos, cópias): o disco do
+    // container pode ter vindo limpo no deploy — repõem-se no arranque.
+    if (!g.__ncFicheirosRepostos) {
+      const repostos = await repostarFicheiros();
+      if (repostos > 0) console.log(`[arranque] ficheiros repostos da base: ${repostos}`);
+      g.__ncFicheirosRepostos = true;
     }
     await resumePendingJobs();
     await once(`daily-geral:${new Date().toISOString().slice(0, 10)}`, runGlobalDailyTasks);
