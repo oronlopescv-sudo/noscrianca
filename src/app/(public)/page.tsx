@@ -2,6 +2,7 @@ import Link from "next/link";
 import { eq, inArray } from "drizzle-orm";
 import { central, c } from "@/db/central";
 import { getTenantDb, t } from "@/db/tenant";
+import { CrecheSearch, type CartaoCreche } from "@/components/public/creche-search";
 
 export const dynamic = "force-dynamic";
 
@@ -9,12 +10,11 @@ export const dynamic = "force-dynamic";
 const LISTED = ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED"] as const;
 
 /** As cores das salas dão a identidade: cada cartão leva uma, em rotação. */
-const CORES_SALAS = [
-  { hex: "#5DC98A" }, { hex: "#F0714F" }, { hex: "#5B8DEF" }, { hex: "#F5B93A" }, { hex: "#A77BDB" },
-];
-const COR_TEXTO = "#1B2333";
-
-type Cartao = { id: string; name: string; slug: string; city: string; logoSrc: string | null };
+const CORES_SALAS = ["#5DC98A", "#F0714F", "#5B8DEF", "#F5B93A", "#A77BDB"];
+const NAVY = "#1B2333";
+const BLUE = "#1E4FA3";
+const ORANGE = "#F0714F";
+const YELLOW = "#F5B93A";
 
 export default async function Landing() {
   const institutions = await central().query.institutions.findMany({
@@ -22,80 +22,78 @@ export default async function Landing() {
     columns: { id: true, name: true, slug: true, city: true },
     orderBy: (i, { asc }) => asc(i.name),
   });
-  // O cartão leva a marca da própria creche: o logo que a direção carregou.
-  const creches: Cartao[] = await Promise.all(institutions.map(async (i): Promise<Cartao> => {
+
+  // Cada cartão leva a marca da própria creche: capa e logótipo carregados pela direção.
+  const creches: CartaoCreche[] = await Promise.all(institutions.map(async (i, idx): Promise<CartaoCreche> => {
+    const cor = CORES_SALAS[idx % CORES_SALAS.length];
+    // "Creche Lua Cheia" → "L": a inicial vem do nome próprio, não do género.
+    const nomeProprio = i.name.replace(/^(creche|jardim de infância|jardim|escola|infância)\s*/i, "").trim() || i.name;
+    const inicial = nomeProprio.charAt(0).toUpperCase() || i.name.charAt(0).toUpperCase();
     try {
       const db = await getTenantDb(i.id);
-      const settings = await db.query.settings.findFirst({ where: eq(t.settings.id, 1) });
-      return { ...i, logoSrc: settings?.logoPath ? `/c/${i.slug}/logo?v=${encodeURIComponent(settings.logoPath.slice(-24))}` : null };
+      const s = await db.query.settings.findFirst({ where: eq(t.settings.id, 1) });
+      return {
+        slug: i.slug,
+        name: i.name,
+        city: i.city ?? "",
+        coverSrc: s?.coverPath ? `/c/${i.slug}/capa?v=${encodeURIComponent(s.coverPath.slice(-24))}` : null,
+        logoSrc: s?.logoPath ? `/c/${i.slug}/logo?v=${encodeURIComponent(s.logoPath.slice(-24))}` : null,
+        inicial,
+        cor,
+      };
     } catch {
-      return { ...i, logoSrc: null };
+      return { slug: i.slug, name: i.name, city: i.city ?? "", coverSrc: null, logoSrc: null, inicial, cor };
     }
   }));
 
   return (
-    <div className="bg-surface">
-      {/* ——— Capa da plataforma: calma mas com a identidade das creches ——— */}
-      <section className="text-white" style={{ background: "linear-gradient(180deg, #1B2333 0%, #223050 100%)" }}>
-        <div className="mx-auto max-w-5xl px-4 py-14 sm:py-16">
-          <div className="pontos-cores" aria-hidden>{CORES_SALAS.map((k, i) => <i key={i} style={{ backgroundColor: k.hex }} />)}</div>
-          <h1 className="display mt-4 max-w-2xl text-3xl leading-tight sm:text-5xl">A creche do seu filho, dentro de um só lugar</h1>
-          <p className="mt-3 max-w-2xl text-white/80">Escolha abaixo a creche para ver a sua página: fotografias, salas e o pedido de vaga. Direção, equipa e famílias entram no seu espaço.</p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <a href="#creches" className="btn-primary px-6 font-semibold">Ver as creches</a>
-            <Link href="/pedir-adesao" className="btn border border-white/40 px-6 hover:bg-white/10">A minha creche quer aderir</Link>
-          </div>
-        </div>
+    <div className="min-h-screen bg-slate-100 pb-24" id="topo">
+      {/* Cabeçalho */}
+      <header className="flex items-center justify-between px-5 pb-10 pt-5" style={{ backgroundColor: NAVY }}>
+        <Link href="/" className="flex items-center gap-3">
+          <span className="text-2xl font-extrabold leading-none text-white">
+            Nos<span style={{ color: YELLOW }}>Criança</span>
+            <span className="mt-1 block text-xs font-medium text-white/80">Creches de Cabo Verde</span>
+          </span>
+        </Link>
+        <span aria-hidden className="text-2xl text-white">≡</span>
+      </header>
+
+      {/* Faixa de destaque */}
+      <section className="-mt-6 rounded-b-[2rem] px-6 pb-14 pt-8 text-white" style={{ backgroundColor: BLUE }}>
+        <div className="pontos-cores" aria-hidden>{CORES_SALAS.map((k, i) => <i key={i} style={{ backgroundColor: k }} />)}</div>
+        <h1 className="mt-3 text-3xl font-extrabold leading-tight">Encontre a<br />sua Creche</h1>
+        <p className="mt-3 max-w-xs text-sm text-white/90">Ofereça ao seu filho um futuro melhor em Cabo Verde.</p>
       </section>
 
-      <main className="mx-auto max-w-5xl px-4 py-12" id="topo">
-        <h2 className="display text-2xl">Escolha a instituição</h2>
-        {creches.length === 0 ? (
-          <p className="mt-8 rounded-card bg-white p-6 text-center text-ink-soft shadow-sm">Ainda não há instituições disponíveis.</p>
-        ) : (
-          <ul id="creches" className="mt-6 grid scroll-mt-6 gap-4 sm:grid-cols-2">
-            {creches.map((i, idx) => {
-              const cor = CORES_SALAS[idx % CORES_SALAS.length];
-              // "Creche Lua Cheia" → "Lua": a inicial vem do nome próprio, não do género.
-              const nomeProprio = i.name.replace(/^(creche|jardim de infância|jardim|escola|infância)\s*/i, "").trim() || i.name;
-              const inicial = nomeProprio.trim().charAt(0).toUpperCase() || i.name.charAt(0).toUpperCase();
-              return (
-                <li key={i.slug} className="card card-pad flex flex-col gap-4">
-                  <Link href={`/creche/${i.slug}`} className="group flex items-center gap-4">
-                    {i.logoSrc
-                      ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={i.logoSrc} alt={`Logótipo de ${i.name}`} className="h-11 w-11 shrink-0 rounded-xl bg-white object-cover" />
-                      )
-                      : (
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-base font-bold" style={{ backgroundColor: cor.hex, color: COR_TEXTO }} aria-hidden>
-                          {inicial}
-                        </span>
-                      )}
-                    <span>
-                      <span className="block font-medium group-hover:text-accent">{i.name}</span>
-                      {i.city && <span className="block text-xs text-ink-soft">{i.city}</span>}
-                    </span>
-                  </Link>
-                  <div className="flex flex-wrap gap-2">
-                    <Link href={`/creche/${i.slug}`} className="btn btn-secondary btn-sm">Ver a creche</Link>
-                    <Link href={`/c/${i.slug}/entrar`} className="btn-primary btn-sm">Entrar</Link>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      <CrecheSearch items={creches} />
 
-        <section className="mt-12 rounded-card bg-white p-8 text-center shadow-sm">
-          <div className="flex justify-center">
-            <div className="pontos-cores" aria-hidden>{CORES_SALAS.map((k, i) => <i key={i} style={{ backgroundColor: k.hex }} />)}</div>
-          </div>
-          <h2 className="display mt-3 text-xl sm:text-2xl">A sua creche ainda não está aqui?</h2>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-ink-soft">Conte-nos um pouco da instituição: criamos o espaço, os acessos e formamos a equipa para começar.</p>
-          <Link href="/pedir-adesao" className="btn-primary mt-5 px-8">Pedir adesão</Link>
-        </section>
-      </main>
+      {creches.length === 0 && (
+        <p className="mx-4 mt-8 rounded-2xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm">Ainda não há instituições disponíveis.</p>
+      )}
+
+      {/* Pedir adesão */}
+      <section className="mx-4 mt-6 rounded-2xl bg-white p-6 text-center shadow-sm">
+        <div className="flex justify-center">
+          <div className="pontos-cores" aria-hidden>{CORES_SALAS.map((k, i) => <i key={i} style={{ backgroundColor: k }} />)}</div>
+        </div>
+        <h2 className="mt-3 text-lg font-bold" style={{ color: NAVY }}>A sua creche ainda não está aqui?</h2>
+        <p className="mx-auto mt-2 max-w-xs text-sm text-slate-500">Criamos o espaço, os acessos e formamos a equipa para começar.</p>
+        <Link href="/pedir-adesao" className="mt-5 inline-block rounded-full px-8 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: ORANGE }}>Pedir adesão</Link>
+      </section>
+
+      {/* Faixa de rodapé */}
+      <section className="mx-4 mt-6 rounded-2xl p-5" style={{ backgroundColor: "#DCE9FB" }}>
+        <p className="text-lg font-extrabold" style={{ color: BLUE }}>NosCriança</p>
+        <p className="text-sm font-medium" style={{ color: BLUE }}>Juntos pelo bem das nossas crianças!</p>
+      </section>
+
+      {/* Navegação inferior */}
+      <nav aria-label="Navegação principal" className="fixed inset-x-0 bottom-0 z-10 flex justify-around border-t bg-white py-2 text-xs font-semibold" style={{ color: NAVY }}>
+        <a href="#topo" className="flex flex-col items-center gap-0.5" style={{ color: BLUE }}><span aria-hidden className="text-lg">⌂</span>Início</a>
+        <a href="#creches" className="flex flex-col items-center gap-0.5"><span aria-hidden className="text-lg">▦</span>Creches</a>
+        <Link href="/pedir-adesao" className="flex flex-col items-center gap-0.5"><span aria-hidden className="text-lg">＋</span>Adesão</Link>
+      </nav>
     </div>
   );
 }
