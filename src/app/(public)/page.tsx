@@ -27,7 +27,6 @@ export default async function Landing() {
             <li key={i.slug} className="card card-pad flex flex-col gap-4">
               <Link href={`/creche/${i.slug}`} className="group flex items-center justify-between gap-3">
                 <span><span className="block font-medium group-hover:text-accent">{i.name}</span>{i.city && <span className="block text-xs text-ink-soft">{i.city}</span>}</span>
-                <span aria-hidden className="text-accent">→</span>
               </Link>
               <div className="flex flex-wrap gap-2">
                 <Link href={`/creche/${i.slug}`} className="btn btn-secondary btn-sm">Ver a creche</Link>

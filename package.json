@@ -20,6 +20,7 @@
     "db:generate": "drizzle-kit generate --config drizzle.central.config.ts && drizzle-kit generate --config drizzle.tenant.config.ts"
   },
   "dependencies": {
+    "@fontsource-variable/baloo-2": "^5.3.0",
     "@fontsource-variable/inter": "^5.3.0",
     "@paralleldrive/cuid2": "^3.3.0",
     "clsx": "^2.1.1",

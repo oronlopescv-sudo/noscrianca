@@ -3,7 +3,7 @@ import { ActionButton, ActionForm, ConfirmAction, Submit } from "@/components/ui
 import { Card, Check, Field, PageHeader } from "@/components/ui/kit";
 import { t } from "@/db/tenant";
 import { requireTenant } from "@/lib/tenant";
-import { deletePublicPhotoAction, savePublicPageAction, saveSettingsAction, removeLogoAction, uploadLogoAction, uploadPublicPhotoAction } from "@/server/settings";
+import { deletePublicPhotoAction, savePublicPageAction, saveSettingsAction, removeCoverAction, removeLogoAction, uploadCoverAction, uploadLogoAction, uploadPublicPhotoAction } from "@/server/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +62,20 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
               </div>
             )}
           </Card>
+          <Card title="Capa da página pública">
+            <div className="mb-4">
+              {s.coverPath ? <img src={`${ctx.base}/capa?v=${encodeURIComponent(s.coverPath.slice(-24))}`} alt="Capa atual" className="h-36 w-full rounded-xl object-cover" /> : <div className="flex h-36 w-full items-center justify-center rounded-xl bg-surface text-xs text-ink-soft">Sem capa — a página usa as fotografias publicadas</div>}
+            </div>
+            {canWrite && (
+              <div className="space-y-3">
+                <ActionForm action={uploadCoverAction} hidden={{ slug }} className="space-y-3">
+                  <Field label="Fotografia (PNG, JPG ou WebP, até 8 MB)" hint="Ideal na horizontal; aparece em grande no topo da página"><input name="capa" type="file" accept="image/*" required className="input" /></Field>
+                  <div className="flex justify-end"><Submit>Carregar capa</Submit></div>
+                </ActionForm>
+                {s.coverPath && <ActionButton action={removeCoverAction} hidden={{ slug }} className="btn-ghost btn-sm">Remover capa</ActionButton>}
+              </div>
+            )}
+          </Card>
           <Card title="Equipa e conta">
             <p className="text-sm text-ink-soft">Para gerir pessoas e cargos, use as secções Funcionários e Cargos e permissões.</p>
           </Card>
@@ -69,7 +83,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
       </div>
 
       <Card title="Página pública" className="mt-5" actions={<a href={`/creche/${slug}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">Ver página pública</a>}>
-        <p className="mb-4 text-sm text-ink-soft">É a página que qualquer pessoa vê ao escolher a creche na entrada do site. Mostra o nome, o logótipo, os contactos e a morada de cima, as salas ativas, e o que preencher aqui.</p>
+        <p className="mb-4 text-sm text-ink-soft">É a página que qualquer pessoa vê ao escolher a creche na entrada do site. Mostra a capa e o logótipo (aqui ao lado), os contactos e a morada de cima, as salas ativas, e o que preencher aqui.</p>
         <div className="grid gap-6 lg:grid-cols-2">
           <ActionForm action={savePublicPageAction} hidden={{ slug }} className="space-y-4" resetOnSuccess={false}>
             <Field label="Apresentação" hint="Quem somos, projeto educativo, o que oferecemos (até 3000 caracteres)">

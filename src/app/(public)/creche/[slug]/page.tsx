@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import { asc, eq } from "drizzle-orm";
 import { CheckCircle2, Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import "@fontsource-variable/baloo-2";
 import { ActionForm, Submit } from "@/components/ui/client";
 import { Field } from "@/components/ui/kit";
 import { getTenantDb, t } from "@/db/tenant";
@@ -43,7 +44,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       description: desc,
       locale: "pt_CV",
       type: "website",
-      images: d.s?.logoPath ? [{ url: `/c/${slug}/logo` }] : undefined,
+      images: d.s?.coverPath ? [{ url: `/c/${slug}/capa` }] : d.s?.logoPath ? [{ url: `/c/${slug}/logo` }] : undefined,
     },
   };
 }
@@ -70,6 +71,16 @@ export default async function PublicInstitution({ params, searchParams }: { para
   const onAccent = readableTextColorOn(accent);
   const wa = whatsappNumber(phone || "");
   const waHref = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(`Olá! Vim da página online da ${name} e gostava de ficar a saber mais.`)}` : null;
+  // Primeira frase da apresentação abre o hero; o resto fica na secção própria.
+  const abertura = (s?.publicDescription || "").split(/[.\n]/)[0]?.trim().slice(0, 160) || "";
+  const heroPhotos = photos.slice(0, 3);
+  const galeria = photos.slice(heroPhotos.length);
+  const comAlpha = (hex: string, a: number) => {
+    const n = parseInt(hex.replace("#", ""), 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+  };
+  const pontos = <div className="pontos-cores" aria-hidden>{Object.keys(ROOM_COLORS).map((k) => <i key={k} style={{ backgroundColor: ROOM_COLORS[k].hex }} />)}</div>;
+
   const contacts = [
     address && { icon: <MapPin size={18} />, label: "Morada", node: <span>{address}</span> },
     phone && { icon: <Phone size={18} />, label: "Telefone", node: <a href={`tel:${phone}`} className="link">{phone}</a> },
@@ -80,121 +91,161 @@ export default async function PublicInstitution({ params, searchParams }: { para
 
   return (
     <main>
-      <section style={{ backgroundColor: accent, color: onAccent }}>
-        <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:py-14">
-          <div className="flex items-center gap-4">
-            {s?.logoPath
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={`/c/${slug}/logo?v=${encodeURIComponent(s.logoPath.slice(-24))}`} alt={`Logótipo de ${name}`} className="h-20 w-20 shrink-0 rounded-2xl bg-white object-cover" />
-              : <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-3xl font-bold">{name.slice(0, 1)}</span>}
-            <div>
-              <h1 className="text-2xl leading-tight sm:text-4xl">{name}</h1>
-              {inst.city && <p className="mt-1 text-sm opacity-90 sm:text-base">{inst.city}</p>}
-            </div>
+      {/* ——— Capa: a fotografia escolhida pela direção, ou colagem das fotos, com véu ——— */}
+      <section className="relative overflow-hidden text-white" style={heroPhotos.length === 0 && !s?.coverPath ? { backgroundColor: accent, color: onAccent } : undefined}>
+        {s?.coverPath ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`/c/${slug}/capa?v=${encodeURIComponent(s.coverPath.slice(-24))}`} alt="" fetchPriority="high" className="absolute inset-0 h-full w-full object-cover" />
+        ) : heroPhotos.length > 0 && (
+          <div className="hero-collage" aria-hidden>
+            {heroPhotos.map((p, i) => (
+              <img
+                key={p.id}
+                src={`/c/${slug}/foto/${p.id}`}
+                alt=""
+                fetchPriority={i === 0 ? "high" : undefined}
+                loading={i === 0 ? "eager" : "lazy"}
+              />
+            ))}
           </div>
-          <div className="flex flex-col gap-2 sm:items-end">
-            {inst.status !== "SUSPENDED" && <a href="#inscricao" className="btn bg-white px-6 font-semibold text-ink hover:bg-white/90">Pedir inscrição</a>}
+        )}
+        {s?.coverPath || heroPhotos.length > 0 ? (
+          <div
+            className="hero-veu absolute inset-0"
+            aria-hidden
+            style={{ background: `linear-gradient(180deg, ${comAlpha(accent, 0.5)} 0%, ${comAlpha("#1B2333", 0.88)} 85%, ${comAlpha("#1B2333", 0.95)} 100%)` }}
+          />
+        ) : null}
+        <div className="relative mx-auto flex min-h-[460px] max-w-5xl flex-col justify-end px-4 pb-10 pt-20 sm:pb-14 lg:min-h-[540px]">
+          <div className="flex items-center gap-4">
+            {s?.logoPath && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`/c/${slug}/logo?v=${encodeURIComponent(s.logoPath.slice(-24))}`} alt={`Logótipo de ${name}`} className="h-16 w-16 shrink-0 rounded-2xl bg-white object-cover shadow-lg" />
+            )}
+            {inst.city && <p className="text-sm opacity-90">{inst.city}</p>}
+          </div>
+          <h1 className="display mt-3 max-w-3xl text-4xl leading-tight sm:text-6xl">{name}</h1>
+          <div className="mt-3">{pontos}</div>
+          {abertura && <p className="mt-4 max-w-2xl text-base opacity-95 sm:text-lg">{abertura}</p>}
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            {inst.status !== "SUSPENDED" && (
+              <a href="#inscricao" className="btn px-6 font-semibold" style={{ backgroundColor: accent, color: onAccent }}>Pedir inscrição</a>
+            )}
             {waHref && (
-              <a href={waHref} target="_blank" rel="noopener" className="btn border px-6 hover:bg-white/10" style={{ color: onAccent, borderColor: `${onAccent}66` }}>
+              <a href={waHref} target="_blank" rel="noopener" className="btn border border-white/40 px-6 hover:bg-white/10">
                 <MessageCircle size={18} /> WhatsApp
               </a>
             )}
-            <Link href={`/c/${slug}/entrar`} className="btn border px-6 hover:bg-white/10" style={{ color: onAccent, borderColor: `${onAccent}66` }}>Entrar</Link>
-            <p className="text-xs opacity-90">Direção, equipa e encarregados</p>
+            <Link href={`/c/${slug}/entrar`} className="btn border border-white/40 px-6 hover:bg-white/10">Entrar</Link>
           </div>
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-5xl gap-6 px-4 py-10 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <section className="card card-pad">
-            <h2 className="text-lg">Sobre a instituição</h2>
-            {s?.publicDescription
-              ? <p className="mt-3 whitespace-pre-wrap text-ink-soft">{s.publicDescription}</p>
-              : <p className="mt-3 text-ink-soft">Esta instituição ainda não publicou a sua apresentação. Use os contactos ao lado para saber mais.</p>}
+      <div className="mx-auto max-w-3xl px-4 py-12 sm:max-w-5xl">
+        {/* ——— Apresentação ——— */}
+        <section>
+          <h2 className="display text-xl sm:text-2xl">A {name}</h2>
+          {s?.publicDescription && s.publicDescription !== abertura ? (
+            <p className="mt-3 max-w-2xl whitespace-pre-wrap text-ink-soft">{s.publicDescription}</p>
+          ) : s?.publicDescription ? null : (
+            <p className="mt-3 max-w-2xl text-ink-soft">A apresentação completa está a chegar. Para já, use os contactos para falar directamente com a direção.</p>
+          )}
+        </section>
+
+        {/* ——— Salas: faixas etárias e vaga ——— */}
+        {rooms.length > 0 && (
+          <section className="mt-10">
+            <h2 className="display text-xl sm:text-2xl">Salas e idades</h2>
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {rooms.map((r) => (
+                <li key={r.id} className="rounded-card p-4" style={{ backgroundColor: ROOM_COLORS[r.color]?.hex ?? "#1B2333", color: ROOM_COLORS[r.color]?.ink ?? "#FFFFFF" }}>
+                  <p className="font-semibold">{r.name}</p>
+                  <p className="mt-1 text-sm opacity-90">{ages(r.ageMinMonths, r.ageMaxMonths)}</p>
+                  <p className="mt-0.5 text-xs opacity-80">Até {r.capacity} crianças</p>
+                </li>
+              ))}
+            </ul>
           </section>
+        )}
 
-          {photos.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-lg">Fotografias</h2>
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {photos.map((p) => (
-                  <li key={p.id}>
-                    <a href={`/c/${slug}/foto/${p.id}`} target="_blank" rel="noopener" className="block overflow-hidden rounded-card bg-surface">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/c/${slug}/foto/${p.id}`} alt={p.caption || `Fotografia de ${name}`} loading="lazy" className="aspect-[4/3] w-full object-cover" />
-                    </a>
-                    {p.caption && <p className="mt-1.5 text-xs text-ink-soft">{p.caption}</p>}
-                  </li>
-                ))}
-              </ul>
-            </section>
+        {/* ——— Galeria: todas as fotografias consentidas ——— */}
+        {(galeria.length > 0 || heroPhotos.length > 0) && (
+          <section className="mt-10">
+            <h2 className="display text-xl sm:text-2xl">Fotografias</h2>
+            <ul className="mt-4 columns-2 gap-3 sm:columns-3 [&>*]:mb-3">
+              {[...galeria, ...heroPhotos].map((p) => (
+                <li key={p.id} className="break-inside-avoid">
+                  <a href={`/c/${slug}/foto/${p.id}`} target="_blank" rel="noopener" className="block overflow-hidden rounded-xl bg-surface">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/c/${slug}/foto/${p.id}`} alt={p.caption || `Fotografia de ${name}`} loading="lazy" className="w-full object-cover" />
+                  </a>
+                  {p.caption && <p className="mt-1 text-xs text-ink-soft">{p.caption}</p>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* ——— Horário e contactos ——— */}
+        <section className="mt-10 grid gap-4 sm:grid-cols-2">
+          {s?.publicHours && (
+            <div className="card card-pad">
+              <h2 className="text-base font-semibold">Horário</h2>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-ink-soft">{s.publicHours}</p>
+            </div>
           )}
-
-          {rooms.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-lg">Salas e idades</h2>
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {rooms.map((r) => (
-                  <li key={r.id} className="rounded-card p-4" style={{ backgroundColor: ROOM_COLORS[r.color]?.hex ?? "#1B2333", color: ROOM_COLORS[r.color]?.ink ?? "#FFFFFF" }}>
-                    <p className="font-semibold">{r.name}</p>
-                    <p className="mt-1 text-sm opacity-90">{ages(r.ageMinMonths, r.ageMaxMonths)}</p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {inst.status !== "SUSPENDED" && (
-            <section id="inscricao" className="card card-pad scroll-mt-6">
-              <h2 className="text-lg">Pedir inscrição</h2>
-              {sent ? (
-                <div className="mt-4 flex items-start gap-3 rounded-btn border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                  <CheckCircle2 size={22} className="mt-0.5 shrink-0" />
-                  <p><span className="font-semibold">Pedido enviado.</span> A {name} recebeu os seus dados e vai entrar em contacto consigo.</p>
-                </div>
-              ) : (
-                <>
-                  <p className="mb-4 mt-1 text-sm text-ink-soft">Deixe os seus dados e os da criança. A creche entra em contacto para combinar uma visita e explicar as condições. Este pedido não garante a vaga.</p>
-                  <ActionForm action={requestEnrollmentAction} hidden={{ slug }} className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field label="O seu nome"><input name="guardianName" className="input" required minLength={2} maxLength={120} autoComplete="name" /></Field>
-                      <Field label="Telefone"><input name="phone" type="tel" className="input" maxLength={40} autoComplete="tel" /></Field>
-                      <Field label="Email" className="sm:col-span-2" hint="Indique pelo menos o telefone ou o email"><input name="email" type="email" className="input" maxLength={160} autoComplete="email" /></Field>
-                      <Field label="Nome da criança"><input name="childName" className="input" required minLength={2} maxLength={120} /></Field>
-                      <Field label="Data de nascimento da criança"><input name="childBirthDate" type="date" className="input" /></Field>
-                    </div>
-                    <Field label="Mensagem (opcional)"><textarea name="message" className="input min-h-[90px]" maxLength={1000} placeholder="Quando gostaria de começar, horário pretendido, dúvidas…" /></Field>
-                    <input name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />
-                    <Submit className="btn-primary w-full sm:w-auto" pendingText="A enviar…">Enviar pedido de inscrição</Submit>
-                  </ActionForm>
-                </>
-              )}
-            </section>
-          )}
-        </div>
-
-        <aside className="space-y-6">
-          <section className="card card-pad">
-            <h2 className="text-lg">Contactos</h2>
-            {contacts.length === 0 ? <p className="mt-3 text-sm text-ink-soft">Contactos por publicar.</p> : (
-              <dl className="mt-3 space-y-3 text-sm">
+          <div className="card card-pad">
+            <h2 className="text-base font-semibold">Falar com a creche</h2>
+            {contacts.length === 0 ? <p className="mt-2 text-sm text-ink-soft">Contactos por publicar.</p> : (
+              <dl className="mt-2 space-y-2.5 text-sm">
                 {contacts.map((c) => (
-                  <div key={c.label} className="flex gap-3">
+                  <div key={c.label} className="flex items-start gap-2.5">
                     <span className="mt-0.5 text-ink-soft">{c.icon}</span>
                     <div><dt className="text-xs text-ink-soft">{c.label}</dt><dd>{c.node}</dd></div>
                   </div>
                 ))}
               </dl>
             )}
+          </div>
+        </section>
+
+        {/* ——— Pedido de inscrição ——— */}
+        {inst.status !== "SUSPENDED" && (
+          <section id="inscricao" className="card card-pad mt-10 scroll-mt-6">
+            <h2 className="display text-xl sm:text-2xl">Pedir vaga na {name}</h2>
+            <div className="mt-2">{pontos}</div>
+            {sent ? (
+              <div className="mt-4 flex items-start gap-3 rounded-btn border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                <CheckCircle2 size={22} className="mt-0.5 shrink-0" />
+                <p><span className="font-semibold">Pedido enviado.</span> A {name} recebeu os seus dados e vai entrar em contacto consigo.</p>
+              </div>
+            ) : (
+              <>
+                <p className="mb-4 mt-1 max-w-2xl text-sm text-ink-soft">
+                  Deixe os seus dados e os da criança. A creche entra em contacto para combinar uma visita e explicar as condições.
+                  {waHref ? <> Prefere falar já? <a href={waHref} target="_blank" rel="noopener" className="link">Mande uma mensagem no WhatsApp</a>.</> : " Este pedido não garante a vaga."}
+                </p>
+                <ActionForm action={requestEnrollmentAction} hidden={{ slug }} className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="O seu nome"><input name="guardianName" className="input" required minLength={2} maxLength={120} autoComplete="name" /></Field>
+                    <Field label="Telefone"><input name="phone" type="tel" className="input" maxLength={40} autoComplete="tel" /></Field>
+                    <Field label="Email" className="sm:col-span-2" hint="Indique pelo menos o telefone ou o email"><input name="email" type="email" className="input" maxLength={160} autoComplete="email" /></Field>
+                    <Field label="Nome da criança"><input name="childName" className="input" required minLength={2} maxLength={120} /></Field>
+                    <Field label="Data de nascimento da criança"><input name="childBirthDate" type="date" className="input" /></Field>
+                  </div>
+                  <Field label="Mensagem (opcional)"><textarea name="message" className="input min-h-[90px]" maxLength={1000} placeholder="Quando gostaria de começar, horário pretendido, dúvidas…" /></Field>
+                  <input name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />
+                  <Submit className="btn-primary w-full sm:w-auto" pendingText="A enviar…">Enviar pedido de inscrição</Submit>
+                </ActionForm>
+              </>
+            )}
           </section>
-          <section className="card card-pad text-sm">
-            <h2 className="text-base">Já é da casa?</h2>
-            <p className="mt-2 text-ink-soft">Pais, direção e funcionários entram com o seu email e palavra-passe.</p>
-            <Link href={`/c/${slug}/entrar`} className="btn-primary mt-4 w-full">Iniciar sessão</Link>
-          </section>
-          <p className="text-center text-sm"><Link href="/" className="link">← Ver todas as instituições</Link></p>
-        </aside>
+        )}
+
+        <div className="mt-10 flex flex-col items-center gap-3 border-t border-line pt-6 text-sm text-ink-soft">
+          <p>Pais, direção e equipa: <Link href={`/c/${slug}/entrar`} className="link">iniciar sessão</Link></p>
+          <p><Link href="/" className="link">Ver todas as instituições</Link></p>
+        </div>
       </div>
     </main>
   );
