@@ -117,14 +117,14 @@ export default async function PublicInstitution({ params, searchParams }: { para
           />
         ) : null}
         <div className="relative mx-auto flex min-h-[460px] max-w-5xl flex-col justify-end px-4 pb-10 pt-20 sm:pb-14 lg:min-h-[540px]">
-          <div className="flex items-center gap-4">
+          {inst.city && <p className="text-sm opacity-90">{inst.city}</p>}
+          <h1 className="display mt-2 flex max-w-3xl flex-wrap items-center gap-4 text-4xl leading-tight sm:text-6xl">
             {s?.logoPath && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={`/c/${slug}/logo?v=${encodeURIComponent(s.logoPath.slice(-24))}`} alt={`Logótipo de ${name}`} className="h-16 w-16 shrink-0 rounded-2xl bg-white object-cover shadow-lg" />
+              <img src={`/c/${slug}/logo?v=${encodeURIComponent(s.logoPath.slice(-24))}`} alt={`Logótipo de ${name}`} className="h-16 w-16 shrink-0 rounded-2xl bg-white object-cover shadow-lg sm:h-20 sm:w-20" />
             )}
-            {inst.city && <p className="text-sm opacity-90">{inst.city}</p>}
-          </div>
-          <h1 className="display mt-3 max-w-3xl text-4xl leading-tight sm:text-6xl">{name}</h1>
+            <span>{name}</span>
+          </h1>
           <div className="mt-3">{pontos}</div>
           {abertura && <p className="mt-4 max-w-2xl text-base opacity-95 sm:text-lg">{abertura}</p>}
           <div className="mt-7 flex flex-wrap items-center gap-3">
