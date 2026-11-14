@@ -19,7 +19,10 @@ export default async function SignupRequest({ searchParams }: { searchParams: Pr
         </div>
       ) : (
         <div className="card card-pad">
-          <h1 className="text-xl">Pedir adesão</h1>
+          <div className="pontos-cores" aria-hidden>
+            {["#5DC98A", "#F0714F", "#5B8DEF", "#F5B93A", "#A77BDB"].map((c) => <i key={c} style={{ backgroundColor: c }} />)}
+          </div>
+          <h1 className="display mt-3 text-xl sm:text-2xl">Pedir adesão</h1>
           <p className="mb-5 mt-1 text-sm text-ink-soft">Preencha os dados da instituição. A criação do espaço é feita pela nossa equipa.</p>
           <ActionForm action={requestSignupAction} className="space-y-4">
             <Field label="Nome da instituição"><input name="institutionName" className="input" required maxLength={120} /></Field>
