@@ -15,7 +15,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <nav className="flex items-center gap-2">
-            <Link href="/#creches" className="btn btn-sm border border-white/25 text-white hover:bg-white/10">Entrar</Link>
+            <Link href="/#creches" className="btn btn-sm border border-white/25 text-white hover:bg-white/10">Escolher creche</Link>
             <Link href="/pedir-adesao" className="btn-primary btn-sm hidden sm:inline-flex">Pedir adesão</Link>
           </nav>
         </div>
@@ -30,7 +30,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             NosCriança — Gestão de creches e jardins de infância
           </p>
           <div className="flex gap-4">
-            <Link href="/#creches" className="hover:text-accent">Entrar</Link>
+            <Link href="/#creches" className="hover:text-accent">Escolher creche</Link>
             <Link href="/pedir-adesao" className="hover:text-accent">Pedir adesão</Link>
             <Link href="/admin" className="hover:text-accent">Administração</Link>
           </div>

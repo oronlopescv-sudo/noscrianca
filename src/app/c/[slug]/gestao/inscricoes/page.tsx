@@ -21,7 +21,7 @@ export default async function EnrollmentRequests({ params }: { params: Promise<{
   const canWrite = !ctx.readOnly;
   return (
     <>
-      <PageHeader title="Pedidos de inscrição" subtitle={`${open} por tratar · recebidos pela página pública da creche`}
+      <PageHeader title="Pedidos de vaga" subtitle={`${open} por tratar · recebidos pela página pública da creche`}
         actions={<a href={`/creche/${slug}`} target="_blank" rel="noopener" className="btn btn-secondary">Ver página pública</a>} />
       {rows.length === 0 ? <EmptyState title="Sem pedidos" text="Quando alguém pedir inscrição na página pública, o pedido aparece aqui." /> : (
         <ul className="space-y-3">
