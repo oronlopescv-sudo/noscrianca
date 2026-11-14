@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Check, Copy, Loader2, X } from "lucide-react";
 import type { ActionResult } from "@/lib/result";
+import { reduzirImagens } from "@/lib/client-image";
 
 export type FormAction = (prev: ActionResult | null, fd: FormData) => Promise<ActionResult>;
 
@@ -79,7 +80,11 @@ export function ActionForm({ action, children, className, hidden, onDone, resetO
   action: FormAction; children: ReactNode; className?: string; hidden?: Record<string, string | number | null | undefined>;
   onDone?: (r: ActionResult) => void; resetOnSuccess?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, null);
+  // Antes de chegar ao servidor, as imagens são reduzidas no próprio aparelho.
+  const [state, formAction] = useActionState<ActionResult | null, FormData>(async (prev, fd) => {
+    await reduzirImagens(fd);
+    return action(prev, fd);
+  }, null);
   const router = useRouter();
   const toast = useToast();
   const close = useModalClose();

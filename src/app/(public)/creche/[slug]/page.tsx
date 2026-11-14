@@ -141,10 +141,27 @@ export default async function PublicInstitution({ params, searchParams }: { para
         </div>
       </section>
 
-      <div className="mx-auto max-w-3xl px-4 py-12 sm:max-w-5xl">
+      {/* ——— Navegação da própria creche: sticky, com as secções da página ——— */}
+      <nav aria-label="Secções da página" className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
+        <ul className="mx-auto flex max-w-5xl items-center gap-5 overflow-x-auto px-4 py-3 text-sm font-medium text-ink-soft [&>li>a:hover]:text-ink">
+          <li><a href="#sobre">A creche</a></li>
+          {rooms.length > 0 && <li><a href="#salas">Salas</a></li>}
+          {photos.length > 0 && <li><a href="#fotos">Fotografias</a></li>}
+          <li><a href="#contactos">Contactos</a></li>
+          {inst.status !== "SUSPENDED" && (
+            <li className="ml-auto"><a href="#inscricao" className="btn btn-sm px-4 font-semibold" style={{ backgroundColor: accent, color: onAccent }}>Pedir vaga</a></li>
+          )}
+        </ul>
+      </nav>
+
+      <div aria-hidden className="h-1.5 w-full bg-gradient-to-r from-[#5DC98A] via-[#F5B93A] via-[#F0714F] to-[#A77BDB]" />
+
+      <div className="relative mx-auto max-w-3xl overflow-hidden px-4 py-12 sm:max-w-5xl">
+        <div aria-hidden className="pointer-events-none absolute -right-24 -top-10 h-72 w-72 rounded-full bg-[#5B8DEF]/15 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -left-20 top-96 h-72 w-72 rounded-full bg-[#F5B93A]/20 blur-3xl" />
         {/* ——— Apresentação ——— */}
-        <section>
-          <h2 className="display text-xl sm:text-2xl">A {name}</h2>
+        <section id="sobre" className="scroll-mt-16">
+          <h2 className="display flex items-center gap-3 text-2xl sm:text-3xl"><span aria-hidden className="h-2 w-10 rounded-full bg-gradient-to-r from-[#A77BDB] to-[#F0714F]" />A {name}</h2>
           {s?.publicDescription && s.publicDescription !== abertura ? (
             <p className="mt-3 max-w-2xl whitespace-pre-wrap text-ink-soft">{s.publicDescription}</p>
           ) : s?.publicDescription ? null : (
@@ -154,12 +171,12 @@ export default async function PublicInstitution({ params, searchParams }: { para
 
         {/* ——— Salas: faixas etárias e vaga ——— */}
         {rooms.length > 0 && (
-          <section className="mt-10">
-            <h2 className="display text-xl sm:text-2xl">Salas e idades</h2>
+          <section id="salas" className="mt-10 scroll-mt-16">
+            <h2 className="display flex items-center gap-3 text-2xl sm:text-3xl"><span aria-hidden className="h-2 w-10 rounded-full bg-gradient-to-r from-[#5DC98A] to-[#5B8DEF]" />Salas e idades</h2>
             <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {rooms.map((r) => (
-                <li key={r.id} className="rounded-card p-4" style={{ backgroundColor: ROOM_COLORS[r.color]?.hex ?? "#1B2333", color: ROOM_COLORS[r.color]?.ink ?? "#FFFFFF" }}>
-                  <p className="font-semibold">{r.name}</p>
+                <li key={r.id} className="group rounded-[1.5rem] p-5 shadow-lg transition hover:-translate-y-1 hover:shadow-xl" style={{ backgroundColor: ROOM_COLORS[r.color]?.hex ?? "#1B2333", color: ROOM_COLORS[r.color]?.ink ?? "#FFFFFF", boxShadow: `0 18px 40px -18px ${ROOM_COLORS[r.color]?.hex ?? "#1B2333"}` }}>
+                  <p className="display text-xl font-bold">{r.name}</p>
                   <p className="mt-1 text-sm opacity-90">{ages(r.ageMinMonths, r.ageMaxMonths)}</p>
                   <p className="mt-0.5 text-xs opacity-80">Até {r.capacity} crianças</p>
                 </li>
@@ -170,14 +187,14 @@ export default async function PublicInstitution({ params, searchParams }: { para
 
         {/* ——— Galeria: todas as fotografias consentidas ——— */}
         {(galeria.length > 0 || heroPhotos.length > 0) && (
-          <section className="mt-10">
-            <h2 className="display text-xl sm:text-2xl">Fotografias</h2>
+          <section id="fotos" className="mt-10 scroll-mt-16">
+            <h2 className="display flex items-center gap-3 text-2xl sm:text-3xl"><span aria-hidden className="h-2 w-10 rounded-full bg-gradient-to-r from-[#F0714F] to-[#F5B93A]" />Fotografias</h2>
             <ul className="mt-4 columns-2 gap-3 sm:columns-3 [&>*]:mb-3">
               {[...galeria, ...heroPhotos].map((p) => (
                 <li key={p.id} className="break-inside-avoid">
-                  <a href={`/c/${slug}/foto/${p.id}`} target="_blank" rel="noopener" className="block overflow-hidden rounded-xl bg-surface">
+                  <a href={`/c/${slug}/foto/${p.id}`} target="_blank" rel="noopener" className="group block overflow-hidden rounded-[1.25rem] bg-surface shadow-md">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/c/${slug}/foto/${p.id}`} alt={p.caption || `Fotografia de ${name}`} loading="lazy" className="w-full object-cover" />
+                    <img src={`/c/${slug}/foto/${p.id}`} alt={p.caption || `Fotografia de ${name}`} loading="lazy" className="w-full object-cover transition duration-500 group-hover:scale-105" />
                   </a>
                   {p.caption && <p className="mt-1 text-xs text-ink-soft">{p.caption}</p>}
                 </li>
@@ -187,15 +204,15 @@ export default async function PublicInstitution({ params, searchParams }: { para
         )}
 
         {/* ——— Horário e contactos ——— */}
-        <section className="mt-10 grid gap-4 sm:grid-cols-2">
+        <section id="contactos" className="mt-10 grid scroll-mt-16 gap-4 sm:grid-cols-2">
           {s?.publicHours && (
-            <div className="card card-pad">
-              <h2 className="text-base font-semibold">Horário</h2>
+            <div className="rounded-[1.5rem] border-0 bg-gradient-to-br from-[#5B8DEF]/10 to-[#5DC98A]/10 p-6 shadow-md">
+              <h2 className="text-lg font-bold">Horário</h2>
               <p className="mt-2 whitespace-pre-wrap text-sm text-ink-soft">{s.publicHours}</p>
             </div>
           )}
-          <div className="card card-pad">
-            <h2 className="text-base font-semibold">Falar com a creche</h2>
+          <div className="rounded-[1.5rem] bg-gradient-to-br from-[#F0714F]/10 to-[#A77BDB]/10 p-6 shadow-md">
+            <h2 className="text-lg font-bold">Falar com a creche</h2>
             {contacts.length === 0 ? <p className="mt-2 text-sm text-ink-soft">Contactos por publicar.</p> : (
               <dl className="mt-2 space-y-2.5 text-sm">
                 {contacts.map((c) => (
@@ -211,7 +228,7 @@ export default async function PublicInstitution({ params, searchParams }: { para
 
         {/* ——— Pedido de inscrição ——— */}
         {inst.status !== "SUSPENDED" && (
-          <section id="inscricao" className="card card-pad mt-10 scroll-mt-6">
+          <section id="inscricao" className="mt-10 scroll-mt-16 rounded-[1.75rem] bg-white p-6 shadow-xl ring-1 ring-black/5 sm:p-8">
             <h2 className="display text-xl sm:text-2xl">Pedir vaga na {name}</h2>
             <div className="mt-2">{pontos}</div>
             {sent ? (
