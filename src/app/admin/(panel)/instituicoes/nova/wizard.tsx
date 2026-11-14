@@ -1,5 +1,5 @@
-import { ILHAS } from "@/lib/islands";
 "use client";
+import { ILHAS } from "@/lib/islands";
 
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
