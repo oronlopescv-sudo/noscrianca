@@ -4,13 +4,20 @@ import type { PaymentMethod } from "@/db/tenant/schema";
 import { ActionError } from "@/lib/result";
 import { periodLabel } from "@/lib/format";
 
+/** Próximo número (F/R + ano + sequência). O contador nunca fica atrás dos números
+ * já emitidos: se ficasse, a inserção falhava por número duplicado e o erro
+ * chegava à direção como "erro inesperado". */
 async function nextNumber(tx: TenantExecutor, kind: "invoice" | "receipt"): Promise<string> {
+  const prefixo = kind === "invoice" ? "F" : "R";
+  const ano = new Date().getUTCFullYear();
+  const tabela = kind === "invoice" ? t.invoices : t.receipts;
   const col = kind === "invoice" ? t.settings.invoiceCounter : t.settings.receiptCounter;
+  const maior = sql`(SELECT COALESCE(MAX(CAST(split_part(${tabela.number}, '/', 2) AS integer)), 0) FROM ${tabela} WHERE ${tabela.number} LIKE ${`${prefixo}${ano}/%`})`;
   const [row] = await tx.update(t.settings)
-    .set(kind === "invoice" ? { invoiceCounter: sql`${col} + 1` } : { receiptCounter: sql`${col} + 1` })
+    .set(kind === "invoice" ? { invoiceCounter: sql`GREATEST(${col}, ${maior}) + 1` } : { receiptCounter: sql`GREATEST(${col}, ${maior}) + 1` })
     .where(eq(t.settings.id, 1)).returning({ n: col });
   if (!row) throw new ActionError("Definições da instituição em falta.");
-  return `${kind === "invoice" ? "F" : "R"}${new Date().getUTCFullYear()}/${String(row.n).padStart(5, "0")}`;
+  return `${prefixo}${ano}/${String(row.n).padStart(5, "0")}`;
 }
 
 function dueDateFor(period: string, dueDay: number): string {

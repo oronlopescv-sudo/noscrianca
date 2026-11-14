@@ -18,6 +18,13 @@ export async function run(fn: () => Promise<ActionResult | void>): Promise<Actio
     if (typeof digest === "string" && digest.startsWith("NEXT_")) throw e;
     if (e instanceof ActionError) return { ok: false, error: e.message };
     if (e instanceof ZodError) return { ok: false, error: e.issues[0]?.message ?? "Dados inválidos." };
+    // 23505 = valor duplicado na base (número de fatura, associação repetida, etc.).
+    // Antes isto aparecia como "erro inesperado": agora a direção vê o que se passou.
+    const codigo = (e as { code?: string })?.code ?? (e as { cause?: { code?: string } })?.cause?.code;
+    if (codigo === "23505") {
+      console.error("[action] registo duplicado:", e);
+      return { ok: false, error: "Já existe um registo com estes dados. Atualize a página e confirme antes de tentar de novo." };
+    }
     console.error("[action]", e);
     return { ok: false, error: "Ocorreu um erro inesperado. Tente novamente." };
   }
