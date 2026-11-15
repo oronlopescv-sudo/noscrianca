@@ -346,6 +346,9 @@ export default async function PublicInstitution({ params, searchParams }: { para
             <Link href="/">Ver todas as creches</Link>
           </div>
         </div>
+        <p className="mx-auto max-w-7xl border-t border-white/15 px-4 py-4 text-center text-xs opacity-80">
+          Plataforma NosCriança · Projeto criado por <span className="font-semibold">Orson Lopes</span> · <a href="mailto:orsonricardo@hotmail.fr" className="inline-flex min-h-[32px] items-center underline">orsonricardo@hotmail.fr</a>
+        </p>
       </footer>
     </div>
   );

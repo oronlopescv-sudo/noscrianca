@@ -35,6 +35,9 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             <Link href="/admin" className="hover:text-accent">Administração</Link>
           </div>
         </div>
+        <p className="mx-auto max-w-6xl px-4 pb-6 text-center text-xs text-ink-soft sm:text-left">
+          Projeto criado por <span className="font-semibold text-ink">Orson Lopes</span> · <a href="mailto:orsonricardo@hotmail.fr" className="link inline-flex min-h-[32px] items-center">orsonricardo@hotmail.fr</a>
+        </p>
       </footer>
     </PlainShell>
   );

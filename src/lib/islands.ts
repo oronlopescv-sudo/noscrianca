@@ -2,7 +2,6 @@
 export const ILHAS = [
   "Santo Antão",
   "São Vicente",
-  "Santa Luzia",
   "São Nicolau",
   "Sal",
   "Boa Vista",
