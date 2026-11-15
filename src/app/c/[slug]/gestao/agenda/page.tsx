@@ -8,6 +8,7 @@ import { deleteEventAction, saveEventAction } from "@/server/extras";
 
 export const dynamic = "force-dynamic";
 const AUDIENCE: Record<string, string> = { ALL: "Pais e equipa", GUARDIANS: "Só pais", STAFF: "Só equipa" };
+const KIND: Record<string, string> = { EVENTO: "Evento", FERIADO: "Feriado", FERIAS: "Férias", REUNIAO: "Reunião de pais" };
 
 export default async function AgendaPage({ params }: { params: Promise<{ slug: string }> }) {
   const ctx = await requireTenant((await params).slug, { panel: "MANAGEMENT", permission: "announcements.manage" });
@@ -26,7 +27,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ slug: s
           <div className="flex min-w-0 gap-3">
             <div className="w-24 shrink-0 text-sm font-semibold text-accent">{fmtDate(e.date)}{e.endDate && e.endDate !== e.date ? <span className="block text-xs font-normal text-ink-soft">até {fmtDate(e.endDate)}</span> : null}</div>
             <div className="min-w-0">
-              <p className="text-sm font-medium">{e.title} <Badge tone={e.audience === "STAFF" ? "purple" : e.audience === "ALL" ? "blue" : "gray"}>{AUDIENCE[e.audience] ?? e.audience}</Badge> {e.classroom && <Badge>{e.classroom.name}</Badge>}</p>
+              <p className="text-sm font-medium">{e.title} {e.kind !== "EVENTO" && <Badge tone="amber">{KIND[e.kind]}</Badge>} <Badge tone={e.audience === "STAFF" ? "purple" : e.audience === "ALL" ? "blue" : "gray"}>{AUDIENCE[e.audience] ?? e.audience}</Badge> {e.classroom && <Badge>{e.classroom.name}</Badge>}</p>
               {e.description && <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink-soft">{e.description}</p>}
             </div>
           </div>
@@ -45,6 +46,9 @@ export default async function AgendaPage({ params }: { params: Promise<{ slug: s
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Data"><input name="date" type="date" className="input" required defaultValue={today} /></Field>
                 <Field label="Até (opcional)" hint="Para eventos de vários dias"><input name="endDate" type="date" className="input" /></Field>
+                <Field label="Tipo" hint="Feriados, férias e reuniões aparecem no calendário escolar do site">
+                  <select name="kind" className="input" defaultValue="EVENTO"><option value="EVENTO">Evento</option><option value="FERIADO">Feriado / encerramento</option><option value="FERIAS">Férias</option><option value="REUNIAO">Reunião de pais</option></select>
+                </Field>
                 <Field label="Quem vê">
                   <select name="audience" className="input" defaultValue="ALL"><option value="ALL">Pais e equipa</option><option value="GUARDIANS">Só pais</option><option value="STAFF">Só equipa</option></select>
                 </Field>

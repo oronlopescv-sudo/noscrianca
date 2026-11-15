@@ -6,6 +6,7 @@ import type { PaymentMethod } from "@/db/tenant/schema";
 import { isIsoDate, money, parseMoney, todayIn } from "@/lib/format";
 import { fail, file, run, str, type ActionResult } from "@/lib/result";
 import { METHOD_LABELS, recordPayment } from "@/lib/services/finance";
+import { mailConfigured, sendMail } from "@/lib/mail";
 import { saveUpload } from "@/lib/storage";
 import { assertChildAccess, audit, notify, staffWithPermission, tenantAction } from "@/lib/tenant";
 
@@ -16,11 +17,32 @@ export async function setEnrollmentStatusAction(_p: S, fd: FormData): Promise<Ac
   return run(async () => {
     const ctx = await tenantAction(str(fd, "slug"), { permission: "children.manage" });
     const status = str(fd, "status");
-    if (!["NEW", "CONTACTED", "CLOSED"].includes(status)) fail("Estado inválido.");
+    if (!["NEW", "CONTACTED", "WAITLIST", "CLOSED"].includes(status)) fail("Estado inválido.");
     const [row] = await ctx.db.update(t.enrollmentRequests).set({ status, handledByName: ctx.user.name }).where(eq(t.enrollmentRequests.id, str(fd, "id"))).returning();
     if (!row) fail("Pedido não encontrado.");
     await audit(ctx, "Pedido de inscrição atualizado", { entity: "enrollmentRequest", entityId: row.id, details: { crianca: row.childName, estado: status } });
     return { ok: true, message: "Pedido atualizado." };
+  });
+}
+
+/** Avisa a família da lista de espera de que abriu vaga (email) e marca o pedido como em contacto. */
+export async function notifyWaitlistAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "children.manage", write: true });
+    const row = await ctx.db.query.enrollmentRequests.findFirst({ where: eq(t.enrollmentRequests.id, str(fd, "id")) });
+    if (!row) fail("Pedido não encontrado.");
+    if (row!.status !== "WAITLIST") fail("Só se avisa quem está na lista de espera.");
+    if (!row!.email) fail("Este pedido não tem email. Contacte a família por telefone.");
+    if (!mailConfigured()) fail("O email não está configurado no servidor. Contacte a família por telefone ou WhatsApp.");
+    const ok = await sendMail({
+      to: row!.email, replyTo: ctx.settings.email || undefined,
+      subject: `Abriu uma vaga em ${ctx.settings.name}`,
+      text: [`Olá ${row!.guardianName},`, "", `Abriu uma vaga para ${row!.childName}. Entre em contacto com a creche para confirmar a inscrição.`, "", ctx.settings.name].join("\n"),
+    });
+    if (!ok) fail("Não foi possível enviar o email. Tente de novo ou contacte a família por telefone.");
+    await ctx.db.update(t.enrollmentRequests).set({ status: "CONTACTED", handledByName: ctx.user.name }).where(eq(t.enrollmentRequests.id, row!.id));
+    await audit(ctx, "Família da lista de espera avisada", { entity: "enrollmentRequest", entityId: row!.id, details: { crianca: row!.childName } });
+    return { ok: true, message: "Família avisada por email." };
   });
 }
 
@@ -99,8 +121,10 @@ export async function saveEventAction(_p: S, fd: FormData): Promise<ActionResult
     if (!["ALL", "GUARDIANS", "STAFF"].includes(audience)) fail("Destinatários inválidos.");
     const classroomId = str(fd, "classroomId") || null;
     if (classroomId && !(await ctx.db.query.classrooms.findFirst({ where: eq(t.classrooms.id, classroomId) }))) fail("Turma inválida.");
+    const kind = str(fd, "kind") || "EVENTO";
+    if (!["EVENTO", "FERIADO", "FERIAS", "REUNIAO"].includes(kind)) fail("Tipo de evento inválido.");
     if (ctx.classroomIds !== null && (!classroomId || !ctx.classroomIds.includes(classroomId))) fail("Só pode criar eventos para as suas turmas.");
-    const [ev] = await ctx.db.insert(t.events).values({ title, description: str(fd, "description").slice(0, 1000), date, endDate, classroomId, audience, createdByName: ctx.user.name }).returning();
+    const [ev] = await ctx.db.insert(t.events).values({ title, description: str(fd, "description").slice(0, 1000), date, endDate, classroomId, audience, kind, createdByName: ctx.user.name }).returning();
     await audit(ctx, "Evento adicionado à agenda", { entity: "event", entityId: ev.id, details: { titulo: title, data: date } });
     return { ok: true, message: "Evento adicionado à agenda." };
   });

@@ -1,4 +1,4 @@
-import { and, asc, gte, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { fmtTime, isIsoDate, toCsv } from "@/lib/format";
 import { INVOICE_STATUS } from "@/lib/labels";
@@ -6,7 +6,7 @@ import { PAYMENT_METHODS } from "@/lib/payment-methods";
 import { childScope, loadTenant } from "@/lib/tenant";
 
 const PERM = {
-  criancas: "children.view", encarregados: "children.view", faturas: "finance.view", pagamentos: "finance.view", presencas: "reports.view",
+  criancas: "children.view", encarregados: "children.view", faturas: "finance.view", pagamentos: "finance.view", presencas: "reports.view", "presencas-turma": "reports.view",
 } as const;
 type Kind = keyof typeof PERM;
 
@@ -85,6 +85,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       a.date, `${a.child.firstName} ${a.child.lastName}`, a.status === "PRESENT" ? "Presente" : "Falta", fmt(a.checkInAt), fmt(a.checkOutAt),
       a.droppedBy, a.pickedBy, a.absenceReason,
     ]);
+  }
+
+  if (kind === "presencas-turma") {
+    // Resumo por turma para a direção e para pedidos de subsídio: presenças, faltas e taxa no período.
+    header = ["Turma", "Dias com registo", "Presenças", "Faltas", "Média de presentes por dia", "Taxa de presença (%)"];
+    const att = await ctx.db.select({ date: t.attendance.date, status: t.attendance.status, childId: t.attendance.childId, turma: t.classrooms.name })
+      .from(t.attendance)
+      .innerJoin(t.children, eq(t.children.id, t.attendance.childId))
+      .leftJoin(t.classrooms, eq(t.classrooms.id, t.children.classroomId))
+      .where(and(from ? gte(t.attendance.date, from) : undefined, to ? lte(t.attendance.date, to) : undefined));
+    const porTurma = new Map<string, { dias: Set<string>; presencas: number; faltas: number }>();
+    for (const a of att.filter((x) => inScope(x.childId))) {
+      const nome = a.turma ?? "Sem turma";
+      const acc = porTurma.get(nome) ?? { dias: new Set<string>(), presencas: 0, faltas: 0 };
+      acc.dias.add(a.date);
+      if (a.status === "PRESENT") acc.presencas++; else acc.faltas++;
+      porTurma.set(nome, acc);
+    }
+    const dec = (n: number) => n.toFixed(1).replace(".", ",");
+    rows = [...porTurma.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([nome, a]) => {
+      const total = a.presencas + a.faltas;
+      return [nome, a.dias.size, a.presencas, a.faltas, dec(a.dias.size ? a.presencas / a.dias.size : 0), dec(total ? (a.presencas / total) * 100 : 0)];
+    });
   }
 
   return new Response(toCsv([header, ...rows]), {

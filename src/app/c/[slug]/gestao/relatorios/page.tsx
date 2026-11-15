@@ -12,6 +12,7 @@ const REPORTS = [
   { kind: "faturas", title: "Faturas", text: "Faturas emitidas no intervalo, com total e valor pago.", perm: "finance.view" as const },
   { kind: "pagamentos", title: "Pagamentos", text: "Pagamentos ativos recebidos no intervalo (sem estornos).", perm: "finance.view" as const },
   { kind: "presencas", title: "Presenças", text: "Entradas, saídas e faltas por dia no intervalo.", perm: "reports.view" as const },
+  { kind: "presencas-turma", title: "Presenças por turma", text: "Resumo por turma no período: presenças, faltas e taxa de presença. Útil para a direção e para subsídios.", perm: "reports.view" as const },
 ];
 
 export default async function ReportsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ de?: string; ate?: string }> }) {

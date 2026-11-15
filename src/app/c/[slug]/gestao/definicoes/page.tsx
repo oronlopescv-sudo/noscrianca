@@ -3,7 +3,7 @@ import { ActionButton, ActionForm, ConfirmAction, Submit } from "@/components/ui
 import { Card, Check, Field, PageHeader } from "@/components/ui/kit";
 import { t } from "@/db/tenant";
 import { requireTenant } from "@/lib/tenant";
-import { deletePublicPhotoAction, savePublicPageAction, saveSettingsAction, removeCoverAction, removeLogoAction, uploadCoverAction, uploadLogoAction, uploadActivityPhotoAction, uploadPublicPhotoAction } from "@/server/settings";
+import { deletePublicPhotoAction, saveAdAction, savePublicPageAction, saveSettingsAction, removeCoverAction, removeLogoAction, uploadCoverAction, uploadLogoAction, uploadActivityPhotoAction, uploadPublicPhotoAction } from "@/server/settings";
 import { ATIVIDADES, HERO_PADRAO } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +84,19 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
           </Card>
         </div>
       </div>
+
+      <Card title="Anúncio na página pública" className="mt-5">
+        <p className="mb-4 text-sm text-ink-soft">Aparece ao abrir a página da creche e fecha sozinho ao fim de 5 segundos. Só aparece uma vez por visita ao site.</p>
+        <ActionForm action={saveAdAction} hidden={{ slug }} className="space-y-4" resetOnSuccess={false}>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="adEnabled" defaultChecked={s.adEnabled} disabled={!canWrite} className="h-4 w-4" /> Mostrar anúncio
+          </label>
+          <Field label="Título"><input name="adTitle" className="input" maxLength={80} defaultValue={s.adTitle} disabled={!canWrite} placeholder="Ex.: Vagas abertas para 2027" /></Field>
+          <Field label="Texto"><textarea name="adText" className="input min-h-[80px]" maxLength={300} defaultValue={s.adText} disabled={!canWrite} /></Field>
+          <Field label="Link (opcional)" hint="Começa por https://"><input name="adLink" type="url" className="input" maxLength={300} defaultValue={s.adLink} disabled={!canWrite} placeholder="https://" /></Field>
+          {canWrite && <div className="flex justify-end"><Submit>Guardar anúncio</Submit></div>}
+        </ActionForm>
+      </Card>
 
       <Card title="Página pública" className="mt-5" actions={<a href={`/creche/${slug}`} target="_blank" rel="noopener" className="btn btn-secondary btn-sm">Ver página pública</a>}>
         <p className="mb-4 text-sm text-ink-soft">É a página que qualquer pessoa vê ao escolher a creche na entrada do site. Mostra a capa e o logótipo (aqui ao lado), os contactos e a morada de cima, as salas ativas, e o que preencher aqui.</p>

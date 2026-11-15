@@ -2,7 +2,8 @@
 import { ilhaValida } from "@/lib/islands";
 
 import { z } from "zod";
-import { and, count, gte } from "drizzle-orm";
+import { and, count, eq, gte, sql } from "drizzle-orm";
+import { mailConfigured, sendMail } from "@/lib/mail";
 import { central, c } from "@/db/central";
 import { getTenantDb, t } from "@/db/tenant";
 import { isIsoDate } from "@/lib/format";
@@ -85,10 +86,21 @@ export async function requestEnrollmentAction(_p: ActionResult | null, fd: FormD
     if (!d.email && !d.phone) fail("Indique um email ou um telefone para a creche o poder contactar.");
     const birth = str(fd, "childBirthDate");
     if (birth && (!isIsoDate(birth) || birth > new Date().toISOString().slice(0, 10))) fail("Data de nascimento inválida.");
-    await db.insert(t.enrollmentRequests).values({ ...d, childBirthDate: birth || null });
+    // Sem vaga nas turmas ativas, o pedido fica na lista de espera (a família é avisada quando abrir vaga).
+    const [{ capacidade }] = await db.select({ capacidade: sql<number>`coalesce(sum(${t.classrooms.capacity}), 0)::int` }).from(t.classrooms).where(eq(t.classrooms.active, true));
+    const [{ ativas }] = await db.select({ ativas: count() }).from(t.children).where(eq(t.children.status, "ACTIVE"));
+    const semVaga = capacidade - ativas <= 0;
+    await db.insert(t.enrollmentRequests).values({ ...d, childBirthDate: birth || null, status: semVaga ? "WAITLIST" : "NEW" });
     await notify(db, await staffWithPermission(db, "children.manage"), {
-      title: "Novo pedido de inscrição", body: `${d.childName} · pedido de ${d.guardianName}`, href: `/c/${inst!.slug}/gestao/inscricoes`,
+      title: semVaga ? "Novo pedido na lista de espera" : "Novo pedido de inscrição", body: `${d.childName} · pedido de ${d.guardianName}`, href: `/c/${inst!.slug}/gestao/inscricoes`,
     });
-    return { ok: true, redirect: `/creche/${inst!.slug}?pedido=1#inscricao` };
+    if (semVaga && d.email && mailConfigured()) {
+      await sendMail({
+        to: d.email, subject: "Pedido de vaga recebido: lista de espera",
+        text: [`Olá ${d.guardianName},`, "", `Recebemos o pedido de vaga para ${d.childName}. De momento não há vagas, por isso ficou na lista de espera.`,
+          "Avisamos por este email assim que abrir uma vaga.", "", inst!.name].join("\n"),
+      });
+    }
+    return { ok: true, redirect: `/creche/${inst!.slug}?pedido=${semVaga ? "espera" : "1"}#inscricao` };
   });
 }

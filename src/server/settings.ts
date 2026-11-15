@@ -80,6 +80,22 @@ export async function removeCoverAction(_p: S, fd: FormData): Promise<ActionResu
 // ======================= PÁGINA PÚBLICA =======================
 const MAX_PUBLIC_PHOTOS = 12;
 
+/** Anúncio da creche na página pública (mostrado 5 segundos ao abrir). */
+export async function saveAdAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "settings.manage" });
+    const enabled = bool(fd, "adEnabled");
+    const adTitle = str(fd, "adTitle").slice(0, 80);
+    const adText = str(fd, "adText").slice(0, 300);
+    const adLink = str(fd, "adLink").slice(0, 300);
+    if (adLink && !/^https?:\/\//i.test(adLink)) fail("O link tem de começar por https://");
+    if (enabled && !adTitle && !adText) fail("Para ativar o anúncio, escreva pelo menos um título ou um texto.");
+    await ctx.db.update(t.settings).set({ adEnabled: enabled, adTitle, adText, adLink }).where(eq(t.settings.id, 1));
+    await audit(ctx, enabled ? "Anúncio da página pública ativado" : "Anúncio da página pública desativado");
+    return { ok: true, message: enabled ? "Anúncio guardado e ativo." : "Anúncio guardado (desativado)." };
+  });
+}
+
 export async function savePublicPageAction(_p: S, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     const ctx = await tenantAction(str(fd, "slug"), { permission: "settings.manage" });

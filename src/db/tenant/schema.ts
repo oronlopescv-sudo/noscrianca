@@ -200,9 +200,18 @@ export const attendance = pgTable("attendance", {
   checkOutBy: text("check_out_by"),
   pickedBy: text("picked_by").notNull().default(""),
   absenceReason: text("absence_reason").notNull().default(""),
+  /** Justificação da falta pelo encarregado: NONE (sem justificação), PENDING (por rever), JUSTIFIED (aceite) ou UNJUSTIFIED (recusada). */
+  justificationStatus: text("justification_status").notNull().default("NONE"),
+  justificationText: text("justification_text").notNull().default(""),
+  justificationFilePath: text("justification_file_path"),
+  justifiedByName: text("justified_by_name").notNull().default(""),
+  justifiedAt: ts("justified_at"),
+  justificationDecidedByName: text("justification_decided_by_name").notNull().default(""),
+  justificationDecidedAt: ts("justification_decided_at"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-}, (t) => [uniqueIndex("attendance_child_date_uq").on(t.childId, t.date), index("attendance_date_idx").on(t.date)]);
+}, (t) => [uniqueIndex("attendance_child_date_uq").on(t.childId, t.date), index("attendance_date_idx").on(t.date),
+  check("attendance_justification_ck", sql`${t.justificationStatus} in ('NONE', 'PENDING', 'JUSTIFIED', 'UNJUSTIFIED')`)]);
 
 export const diaryEntries = pgTable("daily_activities", {
   id: id(),
@@ -333,6 +342,11 @@ export const settings = pgTable("settings", {
   reminderDays: text("reminder_days").notNull().default("1,7"),
   publicDescription: text("public_description").notNull().default(""),
   publicHours: text("public_hours").notNull().default(""),
+  /** Anúncio da creche, mostrado na página pública durante 5 segundos ao abrir. */
+  adEnabled: boolean("ad_enabled").notNull().default(false),
+  adTitle: text("ad_title").notNull().default(""),
+  adText: text("ad_text").notNull().default(""),
+  adLink: text("ad_link").notNull().default(""),
   invoiceCounter: integer("invoice_counter").notNull().default(0),
   receiptCounter: integer("receipt_counter").notNull().default(0),
   updatedAt: updatedAt(),
@@ -347,11 +361,11 @@ export const enrollmentRequests = pgTable("enrollment_requests", {
   childName: text("child_name").notNull(),
   childBirthDate: text("child_birth_date"),
   message: text("message").notNull().default(""),
-  /** NEW (por tratar), CONTACTED (em contacto) ou CLOSED (fechado). */
+  /** NEW (por tratar), CONTACTED (em contacto), WAITLIST (lista de espera, sem vaga) ou CLOSED (fechado). */
   status: text("status").notNull().default("NEW"),
   handledByName: text("handled_by_name"),
   createdAt: createdAt(),
-}, (t) => [index("enrollment_status_idx").on(t.status), check("enrollment_status_ck", sql`${t.status} in ('NEW', 'CONTACTED', 'CLOSED')`)]);
+}, (t) => [index("enrollment_status_idx").on(t.status), check("enrollment_status_ck", sql`${t.status} in ('NEW', 'CONTACTED', 'WAITLIST', 'CLOSED')`)]);
 
 /** Comprovativos de pagamento enviados pelos encarregados, à espera de confirmação. */
 export const paymentProofs = pgTable("payment_proofs", {
@@ -379,9 +393,12 @@ export const events = pgTable("events", {
   classroomId: text("classroom_id").references(() => classrooms.id, { onDelete: "set null" }),
   /** ALL (pais e equipa), GUARDIANS (só pais) ou STAFF (só equipa). */
   audience: text("audience").notNull().default("ALL"),
+  /** EVENTO, FERIADO, FERIAS (encerramento de férias) ou REUNIAO (reunião de pais). Alimenta o calendário escolar do site. */
+  kind: text("kind").notNull().default("EVENTO"),
   createdByName: text("created_by_name").notNull(),
   createdAt: createdAt(),
-}, (t) => [index("events_date_idx").on(t.date), check("events_audience_ck", sql`${t.audience} in ('ALL', 'GUARDIANS', 'STAFF')`)]);
+}, (t) => [index("events_date_idx").on(t.date), check("events_audience_ck", sql`${t.audience} in ('ALL', 'GUARDIANS', 'STAFF')`),
+  check("events_kind_ck", sql`${t.kind} in ('EVENTO', 'FERIADO', 'FERIAS', 'REUNIAO')`)]);
 
 /** Férias e faltas da equipa, pedidas pelo funcionário e decididas pela direção. */
 export const staffLeaves = pgTable("staff_leaves", {

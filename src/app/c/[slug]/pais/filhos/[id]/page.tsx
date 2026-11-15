@@ -7,6 +7,7 @@ import { Avatar, Badge, Card, DL, PageHeader } from "@/components/ui/kit";
 import { addDays, ageLabel, fmtDate, fmtTime, todayIn } from "@/lib/format";
 import { canAccessChild, fileUrl, requireTenant } from "@/lib/tenant";
 import { attState } from "@/components/tenant/attendance";
+import { AbsenceJustification } from "@/components/tenant/absence-justification";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,8 @@ export default async function GuardianChild({ params, searchParams }: { params: 
         </Card>
         <ChildCalendar ctx={ctx} childId={id} month={calendarMonth((await searchParams).mes, today)} basePath={`${ctx.base}/pais/filhos/${id}`}
           showFinance showAttendance manage={false} />
-        <Card title="Presenças (últimos 14 dias)" pad={false}>
+        <Card title="Presenças (últimos 14 dias)" pad={false} >
+          <p className="px-4 pt-3 text-xs text-ink-soft sm:px-5">Toque numa falta para a justificar. Pode anexar um atestado ou declaração.</p>
           {att.length === 0 ? <div className="card-pad text-sm text-ink-soft">Sem registos neste período.</div> : (
             <ul className="divide-y divide-line">
               {att.map((a) => {
@@ -58,7 +60,12 @@ export default async function GuardianChild({ params, searchParams }: { params: 
                     <span>{fmtDate(a.date)}</span>
                     <span className="flex items-center gap-2">
                       {a.checkInAt && <span className="text-xs text-ink-soft">{fmtTime(a.checkInAt, ctx.settings.timezone)}</span>}
-                      <Badge tone={s === "absent" ? "red" : s === "in" ? "green" : s === "out" ? "blue" : "gray"}>{ATT[s]}</Badge>
+                      {s === "absent"
+                        ? <AbsenceJustification slug={slug} childId={id} fmt={fmtDate(a.date)} falta={{
+                            id: a.id, date: a.date, justificationStatus: a.justificationStatus, justificationText: a.justificationText,
+                            fileUrl: fileUrl(ctx, a.justificationFilePath), justifiedAt: a.justifiedAt,
+                          }} />
+                        : <Badge tone={s === "in" ? "green" : s === "out" ? "blue" : "gray"}>{ATT[s]}</Badge>}
                     </span>
                   </li>
                 );

@@ -4,6 +4,7 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { t } from "@/db/tenant";
 import { ChildCalendar, calendarMonth } from "@/components/tenant/child-calendar";
 import { ChildForm } from "@/components/tenant/child-form";
+import { BrandBanner } from "@/components/tenant/brand-banner";
 import { DiaryFeed, type FeedEntry } from "@/components/tenant/diary";
 import { ActionButton, ActionForm, ConfirmAction, Submit } from "@/components/ui/client";
 import { Avatar, Badge, Card, DL, EmptyState, Field, PageHeader, Check } from "@/components/ui/kit";
@@ -56,16 +57,17 @@ export default async function ChildPage({ params, searchParams }: { params: Prom
 
   return (
     <>
-      <PageHeader
-        back={{ href: `${ctx.base}/gestao/criancas`, label: "Crianças" }}
+      <div className="mb-3"><Link href={`${ctx.base}/gestao/criancas`} className="text-sm font-semibold text-[#1E63D6] hover:underline">‹ Crianças</Link></div>
+      <BrandBanner
         title={`${child.firstName} ${child.lastName}`}
-        subtitle={<>{ageLabel(child.birthDate, today)} · {child.classroom?.name ?? "Sem turma"} · <Badge tone={child.status === "ACTIVE" ? "green" : "gray"}>{child.status === "ACTIVE" ? "Ativa" : "Inativa"}</Badge></>}
-        actions={canManage && (
-          <ActionButton action={setChildStatusAction} hidden={{ slug, childId: id, status: child.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" }}>
+        subtitle={<>{ageLabel(child.birthDate, today)} · {child.classroom?.name ?? "Sem turma"} · <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold">{child.status === "ACTIVE" ? "Ativa" : "Inativa"}</span></>}
+      >
+        {canManage && (
+          <ActionButton action={setChildStatusAction} hidden={{ slug, childId: id, status: child.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" }} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#12307A] hover:bg-slate-100">
             {child.status === "ACTIVE" ? "Marcar como inativa" : "Reativar"}
           </ActionButton>
         )}
-      />
+      </BrandBanner>
 
       <div className="mb-5">
         <ChildCalendar ctx={ctx} childId={id} month={calendarMonth((await searchParams).mes, today)} basePath={`${ctx.base}/gestao/criancas/${id}`}

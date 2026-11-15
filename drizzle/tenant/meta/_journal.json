@@ -92,6 +92,27 @@
       "when": 1794755445836,
       "tag": "0012_ponto",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794762286215,
+      "tag": "0013_lista_espera_calendario",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794762843169,
+      "tag": "0014_anuncio_creche",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794769935289,
+      "tag": "0015_justificacao_faltas",
+      "breakpoints": true
     }
   ]
 }

@@ -2,13 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { cache } from "react";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, gte, ne } from "drizzle-orm";
 import { ArrowRight, BookOpen, CheckCircle2, ChevronRight, Clock, Heart, Home, Image as ImageIcon, LogIn, Mail, MapPin, MessageCircle, Phone, ShieldCheck, Smile, Star, Users } from "lucide-react";
 import "@fontsource-variable/baloo-2";
 import { ActionForm, Submit } from "@/components/ui/client";
+import { AdOverlay } from "@/components/public/ad-overlay";
 import { Field } from "@/components/ui/kit";
 import { getTenantDb, t } from "@/db/tenant";
 import { ROOM_COLORS } from "@/lib/labels";
+import { fmtDate, todayIn } from "@/lib/format";
 import { whatsappNumber } from "@/lib/collection-rules";
 import { HeroCarousel } from "@/components/public/hero-carousel";
 import { ATIVIDADES, HERO_PADRAO, HEROS_PADRAO } from "@/lib/site";
@@ -29,12 +31,15 @@ const load = cache(async (slug: string) => {
   const inst = await getInstitutionBySlug(slug);
   if (!inst || !institutionUsable(inst.status)) return null;
   const db = await getTenantDb(inst.id);
-  const [s, photos, rooms] = await Promise.all([
+  const hoje = todayIn(inst.timezone);
+  const [s, photos, rooms, calendario] = await Promise.all([
     db.query.settings.findFirst({ where: eq(t.settings.id, 1) }),
     db.query.publicPhotos.findMany({ orderBy: [asc(t.publicPhotos.createdAt)] }),
     db.query.classrooms.findMany({ where: eq(t.classrooms.active, true), orderBy: [asc(t.classrooms.name)] }),
+    // Calendário escolar: só o que é para toda a gente (pais e equipa) e não é um simples evento interno.
+    db.query.events.findMany({ where: and(gte(t.events.date, hoje), eq(t.events.audience, "ALL"), ne(t.events.kind, "EVENTO")), orderBy: [asc(t.events.date)], limit: 8 }),
   ]);
-  return { inst, s, photos, rooms };
+  return { inst, s, photos, rooms, calendario };
 });
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -70,6 +75,8 @@ const VANTAGENS = [
   { icon: Smile, cor: YELLOW, a: "Diversão", b: "Garantida" },
 ];
 
+const KIND_LABEL: Record<string, string> = { FERIADO: "Feriado / encerramento", FERIAS: "Férias", REUNIAO: "Reunião de pais" };
+
 function Titulo({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="display text-3xl font-extrabold sm:text-4xl" style={{ color: NAVY }}>
@@ -81,10 +88,12 @@ function Titulo({ children }: { children: React.ReactNode }) {
 
 export default async function PublicInstitution({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ pedido?: string }> }) {
   const { slug } = await params;
-  const sent = (await searchParams).pedido === "1";
+  const pedido = (await searchParams).pedido;
+  const sent = pedido === "1" || pedido === "espera";
+  const espera = pedido === "espera";
   const d = await load(slug);
   if (!d) notFound();
-  const { inst, s, photos, rooms } = d;
+  const { inst, s, photos, rooms, calendario } = d;
   const name = s?.name ?? inst.name;
   const local = [inst.island, inst.city].filter(Boolean).join(" · ");
   const address = [s?.address || inst.address, inst.city].filter(Boolean).join(", ");
@@ -124,6 +133,9 @@ export default async function PublicInstitution({ params, searchParams }: { para
 
   return (
     <div id="inicio" className="bg-white" style={{ color: "#1B2333" }}>
+      {s?.adEnabled && (s.adTitle || s.adText) && (
+        <AdOverlay slug={inst.slug} title={s.adTitle} text={s.adText} link={s.adLink} />
+      )}
       {/* ——— Barra de topo ——— */}
       <div className="text-white" style={{ backgroundColor: NAVY }}>
         <div className="mx-auto flex max-w-7xl items-center justify-end gap-4 px-4 text-xs font-medium sm:text-[13px]">
@@ -278,6 +290,23 @@ export default async function PublicInstitution({ params, searchParams }: { para
         )}
 
         {/* ——— Contactos e horário ——— */}
+        {calendario.length > 0 && (
+          <section id="calendario" className="mx-auto mt-14 max-w-7xl scroll-mt-32 px-4">
+            <Titulo>Calendário escolar</Titulo>
+            <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+              {calendario.map((e) => (
+                <li key={e.id} className="flex items-start gap-4 rounded-2xl bg-white p-4 shadow-sm">
+                  <div className="w-24 shrink-0 text-sm font-bold" style={{ color: NAVY }}>{fmtDate(e.date)}{e.endDate && e.endDate !== e.date ? <span className="block text-xs font-normal text-slate-500">até {fmtDate(e.endDate)}</span> : null}</div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: ORANGE }}>{KIND_LABEL[e.kind] ?? e.kind}</p>
+                    <p className="font-semibold text-slate-800">{e.title}</p>
+                    {e.description && <p className="mt-1 text-sm text-slate-600">{e.description}</p>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section id="contactos" className="mx-auto mt-14 max-w-7xl scroll-mt-32 px-4">
           <Titulo>Contactos</Titulo>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -309,7 +338,9 @@ export default async function PublicInstitution({ params, searchParams }: { para
               {sent ? (
                 <div className="mt-4 flex items-start gap-3 rounded-btn border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                   <CheckCircle2 size={22} className="mt-0.5 shrink-0" />
-                  <p><span className="font-semibold">Pedido enviado.</span> A {name} recebeu os seus dados e vai entrar em contacto consigo.</p>
+                  <p>{espera
+                    ? <><span className="font-semibold">Ficou na lista de espera.</span> De momento não há vagas. Avisamos assim que abrir uma.</>
+                    : <><span className="font-semibold">Pedido enviado.</span> A {name} recebeu os seus dados e vai entrar em contacto consigo.</>}</p>
                 </div>
               ) : (
                 <>

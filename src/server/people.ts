@@ -75,6 +75,12 @@ export async function createChildAction(_p: S, fd: FormData): Promise<ActionResu
     const [child] = await ctx.db.insert(t.children).values({
       ...d, photoConsent: consent, photoConsentAt: consent ? new Date() : null, photoConsentBy: consent ? ctx.user.name : null,
     }).returning();
+    // Fotografia escolhida no registo (opcional).
+    const f = file(fd, "photo");
+    if (f) {
+      const saved = await saveUpload(ctx.institution.id, `children/${child.id}`, f, { kind: "image", maxMb: 5 });
+      await ctx.db.update(t.children).set({ photoPath: saved.path }).where(eq(t.children.id, child.id));
+    }
     await audit(ctx, "Criança registada", { entity: "child", entityId: child.id, details: { nome: `${d.firstName} ${d.lastName}` } });
     return { ok: true, redirect: `${ctx.base}/gestao/criancas/${child.id}?tab=familia`, message: "Criança registada. Associe agora os encarregados." };
   });

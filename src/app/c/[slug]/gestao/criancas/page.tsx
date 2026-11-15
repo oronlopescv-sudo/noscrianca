@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { and, asc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { t } from "@/db/tenant";
-import { ChildForm } from "@/components/tenant/child-form";
 import { Avatar, Badge, Card, EmptyState, PageHeader } from "@/components/ui/kit";
-import { Modal } from "@/components/ui/client";
 import { ageLabel, money, todayIn } from "@/lib/format";
 import { childScope, fileUrl, requireTenant, visibleClassrooms } from "@/lib/tenant";
 
@@ -22,7 +20,6 @@ export default async function ChildrenPage({ params, searchParams }: { params: P
     with: { classroom: true, guardians: { with: { guardian: { with: { user: true } } } } },
   });
   const classrooms = await visibleClassrooms(ctx, false);
-  const feePlans = await ctx.db.query.feePlans.findMany({ orderBy: (f, { asc }) => asc(f.name) });
   const canManage = ctx.can("children.manage") && !ctx.readOnly;
   // Mensalidade do mês atual de cada criança (só para quem tem permissão financeira).
   const showFinance = ctx.can("finance.view");
@@ -37,11 +34,7 @@ export default async function ChildrenPage({ params, searchParams }: { params: P
       <PageHeader
         title="Crianças"
         subtitle={`${kids.length} ${estado === "ACTIVE" ? "ativas" : "inativas"}`}
-        actions={canManage && (
-          <Modal title="Inscrever criança" trigger="Nova inscrição" wide>
-            <ChildForm slug={ctx.institution.slug} classrooms={classrooms} feePlans={feePlans} today={today} />
-          </Modal>
-        )}
+        actions={canManage && <Link href={`${ctx.base}/gestao/criancas/nova`} className="btn btn-primary btn-sm">Nova inscrição</Link>}
       />
       <form className="mb-4 flex flex-wrap gap-2" role="search">
         <input name="q" defaultValue={q} placeholder="Pesquisar por nome" className="input max-w-xs" aria-label="Pesquisar por nome" />

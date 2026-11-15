@@ -1,14 +1,14 @@
-import { desc } from "drizzle-orm";
+import { count, desc, eq, sql } from "drizzle-orm";
 import { ActionButton } from "@/components/ui/client";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui/kit";
 import { t } from "@/db/tenant";
 import { ageLabel, fmtDate, fmtDateTime, todayIn } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { setEnrollmentStatusAction } from "@/server/extras";
+import { notifyWaitlistAction, setEnrollmentStatusAction } from "@/server/extras";
 
 export const dynamic = "force-dynamic";
-const STATUS: Record<string, { label: string; tone: "red" | "amber" | "gray" }> = {
-  NEW: { label: "Por tratar", tone: "red" }, CONTACTED: { label: "Em contacto", tone: "amber" }, CLOSED: { label: "Fechado", tone: "gray" },
+const STATUS: Record<string, { label: string; tone: "red" | "amber" | "gray" | "blue" }> = {
+  NEW: { label: "Por tratar", tone: "red" }, CONTACTED: { label: "Em contacto", tone: "amber" }, WAITLIST: { label: "Lista de espera", tone: "blue" }, CLOSED: { label: "Fechado", tone: "gray" },
 };
 const wa = (phone: string) => phone.replace(/[^0-9]/g, "");
 
@@ -18,9 +18,14 @@ export default async function EnrollmentRequests({ params }: { params: Promise<{
   const today = todayIn(ctx.settings.timezone);
   const rows = await ctx.db.query.enrollmentRequests.findMany({ orderBy: [desc(t.enrollmentRequests.createdAt)], limit: 200 });
   const open = rows.filter((r) => r.status === "NEW").length;
+  const [{ capacidade }] = await ctx.db.select({ capacidade: sql<number>`coalesce(sum(${t.classrooms.capacity}), 0)::int` }).from(t.classrooms).where(eq(t.classrooms.active, true));
+  const [{ ativas }] = await ctx.db.select({ ativas: count() }).from(t.children).where(eq(t.children.status, "ACTIVE"));
+  const vagas = capacidade - ativas;
+  const espera = rows.filter((r) => r.status === "WAITLIST").length;
   const canWrite = !ctx.readOnly;
   return (
     <>
+      <p className="mb-4 text-sm text-ink-soft">Vagas livres nas turmas ativas: <span className="font-semibold text-ink">{Math.max(vagas, 0)}</span> · Na lista de espera: <span className="font-semibold text-ink">{espera}</span></p>
       <PageHeader title="Pedidos de vaga" subtitle={`${open} por tratar · recebidos pela página pública da creche`}
         actions={<a href={`/creche/${slug}`} target="_blank" rel="noopener" className="btn btn-secondary">Ver página pública</a>} />
       {rows.length === 0 ? <EmptyState title="Sem pedidos" text="Quando alguém pedir inscrição na página pública, o pedido aparece aqui." /> : (
@@ -37,6 +42,7 @@ export default async function EnrollmentRequests({ params }: { params: Promise<{
                     <div className="flex flex-wrap gap-1.5">
                       {r.status !== "CONTACTED" && <ActionButton action={setEnrollmentStatusAction} hidden={{ slug, id: r.id, status: "CONTACTED" }} className="btn-secondary btn-sm">Marcar em contacto</ActionButton>}
                       {r.status !== "CLOSED" && <ActionButton action={setEnrollmentStatusAction} hidden={{ slug, id: r.id, status: "CLOSED" }} className="btn-ghost btn-sm">Fechar</ActionButton>}
+                      {r.status === "WAITLIST" && <ActionButton action={notifyWaitlistAction} hidden={{ slug, id: r.id }} className="btn-primary btn-sm">Avisar: há vaga</ActionButton>}
                       {r.status === "CLOSED" && <ActionButton action={setEnrollmentStatusAction} hidden={{ slug, id: r.id, status: "NEW" }} className="btn-ghost btn-sm">Reabrir</ActionButton>}
                     </div>
                   )}
