@@ -27,10 +27,10 @@ export function BarChart({ data, format, caption }: { data: { label: string; val
         {data.map((d) => <span key={d.label} className="flex-1 truncate text-center text-[11px] text-ink-soft">{d.label}</span>)}
       </div>
       <figcaption className="sr-only">{caption}</figcaption>
-      <table className="sr-only">
+      <div className="sr-only"><table>
         <caption>{caption}</caption>
         <tbody>{data.map((d) => <tr key={d.label}><th scope="row">{d.label}</th><td>{format(d.value)}</td></tr>)}</tbody>
-      </table>
+      </table></div>
     </figure>
   );
 }

@@ -39,17 +39,17 @@ export function CrecheSearch({ items }: { items: CartaoCreche[] }) {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Pesquise por nome da creche ou localização…"
+          placeholder="Nome da creche ou ilha…"
           aria-label="Pesquisar creche"
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+          className="min-w-0 flex-1 bg-transparent text-base outline-none sm:text-sm"
         />
         <button type="submit" className="rounded-full px-5 py-2 text-sm font-semibold text-white" style={{ backgroundColor: ORANGE }}>Pesquisar</button>
       </form>
 
-      <div className="-mt-1 mx-4 mt-4">
+      <div className="mx-4 mt-4">
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <span className="shrink-0 font-semibold" style={{ color: BLUE }}>Ilha</span>
-          <select value={ilha} onChange={(e) => setIlha(e.target.value)} aria-label="Filtrar por ilha" className="min-w-0 flex-1 rounded-full bg-white px-4 py-2 text-sm shadow-sm outline-none">
+          <select value={ilha} onChange={(e) => setIlha(e.target.value)} aria-label="Filtrar por ilha" className="min-h-[44px] min-w-0 flex-1 rounded-full bg-white px-4 py-2 text-base shadow-sm outline-none sm:text-sm">
             <option value="">Todas as ilhas</option>
             {ILHAS.map((i) => <option key={i} value={i}>{i}</option>)}
           </select>
@@ -60,7 +60,7 @@ export function CrecheSearch({ items }: { items: CartaoCreche[] }) {
         <h2 className="flex items-center gap-2 text-lg font-bold" style={{ color: BLUE }}>
           <span aria-hidden>⌂</span> Creches Disponíveis
         </h2>
-        <a href="#creches" className="text-sm font-semibold" style={{ color: BLUE }}>Ver todas →</a>
+        <a href="#creches" className="inline-flex min-h-[44px] items-center text-sm font-semibold" style={{ color: BLUE }}>Ver todas →</a>
       </div>
 
       <ul id="creches" className="mt-4 space-y-5 px-4 pb-6">

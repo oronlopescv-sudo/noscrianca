@@ -118,15 +118,15 @@ export default async function PublicInstitution({ params, searchParams }: { para
         ) : null}
         {/* Decoração lúdica: bolhas coloridas e uma onda no fundo */}
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-          <span className="absolute -left-6 top-24 h-24 w-24 animate-pulse rounded-full bg-[#5DC98A]/70" />
-          <span className="absolute right-10 top-16 h-16 w-16 rounded-full bg-[#F5B93A]/80" />
-          <span className="absolute right-1/4 top-44 h-10 w-10 rounded-full bg-[#5B8DEF]/80" />
-          <span className="absolute left-1/3 top-10 h-6 w-6 rounded-full bg-[#A77BDB]/90" />
+          <span className="absolute -left-8 top-6 h-20 w-20 animate-pulse rounded-full bg-[#5DC98A]/60" />
+          <span className="absolute right-6 top-8 h-14 w-14 rounded-full bg-[#F5B93A]/80" />
+          <span className="absolute right-24 top-20 h-8 w-8 rounded-full bg-[#5B8DEF]/80" />
+          <span className="absolute left-1/3 top-6 h-5 w-5 rounded-full bg-[#A77BDB]/90" />
           <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 1440 120" preserveAspectRatio="none">
             <path d="M0,64 C240,120 480,0 720,48 C960,96 1200,24 1440,72 L1440,120 L0,120 Z" fill="#F6F7F9" />
           </svg>
         </div>
-        <div className="relative mx-auto flex min-h-[460px] max-w-5xl flex-col justify-end px-4 pb-16 pt-20 sm:pb-20 lg:min-h-[540px]">
+        <div className="relative mx-auto flex min-h-[380px] max-w-5xl flex-col justify-end px-4 pb-16 pt-24 sm:min-h-[460px] sm:pb-20 lg:min-h-[540px]">
           {inst.city && <p className="text-sm opacity-90">{inst.city}</p>}
           <h1 className="display mt-2 flex max-w-3xl flex-wrap items-center gap-4 text-4xl leading-tight sm:text-6xl">
             {s?.logoPath && (
@@ -135,7 +135,7 @@ export default async function PublicInstitution({ params, searchParams }: { para
             )}
             <span>{name}</span>
           </h1>
-          <div className="mt-3">{pontos}</div>
+          <div className="mt-3"><span className="inline-flex rounded-full bg-white/90 px-3 py-1.5">{pontos}</span></div>
           {abertura && <p className="mt-4 max-w-2xl text-base opacity-95 sm:text-lg">{abertura}</p>}
           <div className="mt-7 flex flex-wrap items-center gap-3">
             {inst.status !== "SUSPENDED" && (

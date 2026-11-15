@@ -29,7 +29,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </span>
             NosCriança — Gestão de creches e jardins de infância
           </p>
-          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 font-medium">
+          <div className="flex flex-wrap justify-center gap-x-5 font-medium [&>a]:inline-flex [&>a]:min-h-[44px] [&>a]:items-center">
             <Link href="/#creches" className="hover:text-accent">Escolher creche</Link>
             <Link href="/pedir-adesao" className="hover:text-accent">Pedir adesão</Link>
             <Link href="/admin" className="hover:text-accent">Administração</Link>

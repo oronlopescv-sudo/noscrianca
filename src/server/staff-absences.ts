@@ -35,6 +35,7 @@ export async function registerStaffAbsenceAction(_p: S, fd: FormData): Promise<A
     if (!isIsoDate(from) || !isIsoDate(to) || to < from) fail("Datas inválidas.");
     if (to > today) fail("Não é possível registar faltas em datas futuras.");
     const days = dateRange(from, to).filter(isWeekday); // as creches fecham ao fim de semana: uma baixa ao sábado não é falta
+    if (days.length === 0) fail("As datas escolhidas calham ao fim de semana. As faltas só se registam em dias úteis (segunda a sexta).");
     if (days.length > 31) fail("Registe no máximo 31 dias de cada vez.");
     await assertMonthsOpen(ctx, emp!.id, [...new Set(days.map((d) => d.slice(0, 7)))]);
     const deductible = bool(fd, "deductible");

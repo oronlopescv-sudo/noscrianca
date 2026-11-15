@@ -130,8 +130,8 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
         <Card title="Faturas" className="lg:col-span-2" pad={false}
           actions={
             <form className="flex flex-wrap items-center gap-2" role="search">
-              <input type="month" name="mes" defaultValue={period} className="input h-9 w-auto py-1 text-sm" aria-label="Mês" />
-              <select name="estado" defaultValue={sp.estado ?? ""} className="input h-9 w-auto py-1 text-sm" aria-label="Estado">
+              <input type="month" name="mes" defaultValue={period} className="input h-10 w-auto py-1 sm:h-9" aria-label="Mês" />
+              <select name="estado" defaultValue={sp.estado ?? ""} className="input h-10 w-auto py-1 sm:h-9" aria-label="Estado">
                 <option value="">Todas</option>
                 {Object.entries(INVOICE_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
@@ -141,14 +141,14 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
           {filtered.length === 0 ? <div className="card-pad"><EmptyState title="Sem faturas" text="Gere as faturas do mês ou emita uma fatura avulsa." /></div> : (
             <div className="overflow-x-auto">
               <table className="table">
-                <thead><tr><th>Número</th><th>Criança</th><th>Referente a</th><th>Vencimento</th><th className="text-right">Valor</th><th>Estado</th></tr></thead>
+                <thead><tr><th className="hidden sm:table-cell">Número</th><th>Criança</th><th className="hidden sm:table-cell">Referente a</th><th className="hidden sm:table-cell">Vencimento</th><th className="text-right">Valor</th><th>Estado</th></tr></thead>
                 <tbody>
                   {filtered.map((i) => (
                     <tr key={i.id}>
-                      <td><Link href={`${ctx.base}/gestao/mensalidades/${i.id}`} className="link font-medium">{i.number}</Link></td>
-                      <td>{i.child.firstName} {i.child.lastName}</td>
-                      <td className="text-ink-soft">{i.kind === "MONTHLY" ? periodLabel(i.period) : "Avulsa"}</td>
-                      <td>{i.dueDate.split("-").reverse().join("/")}</td>
+                      <td className="hidden sm:table-cell"><Link href={`${ctx.base}/gestao/mensalidades/${i.id}`} className="link font-medium">{i.number}</Link></td>
+                      <td>{i.child.firstName} {i.child.lastName}<Link href={`${ctx.base}/gestao/mensalidades/${i.id}`} className="link block py-1 text-[13px] font-medium sm:hidden">{i.number}</Link><span className="block text-xs text-ink-soft sm:hidden">{i.kind === "MONTHLY" ? periodLabel(i.period) : "Avulsa"} · vence {i.dueDate.split("-").reverse().slice(0, 2).join("/")}</span></td>
+                      <td className="hidden text-ink-soft sm:table-cell">{i.kind === "MONTHLY" ? periodLabel(i.period) : "Avulsa"}</td>
+                      <td className="hidden sm:table-cell">{i.dueDate.split("-").reverse().join("/")}</td>
                       <td className="text-right font-medium">{money(i.totalCents, cur)}</td>
                       <td><Badge tone={INVOICE_STATUS[i.status]?.tone ?? "gray"}>{INVOICE_STATUS[i.status]?.label ?? i.status}</Badge></td>
                     </tr>

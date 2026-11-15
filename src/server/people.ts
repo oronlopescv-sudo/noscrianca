@@ -109,8 +109,9 @@ export async function setChildStatusAction(_p: S, fd: FormData): Promise<ActionR
           .where(and(eq(t.childInactivePeriods.childId, id), isNull(t.childInactivePeriods.toDate)));
       } else {
         await tx.update(t.children).set({ status: "INACTIVE", leftAt: today }).where(eq(t.children.id, id));
+        // Saída, regresso e nova saída no mesmo dia: o período desse dia volta a ficar em aberto.
         await tx.insert(t.childInactivePeriods).values({ childId: id, fromDate: today })
-          .onConflictDoNothing({ target: [t.childInactivePeriods.childId, t.childInactivePeriods.fromDate] });
+          .onConflictDoUpdate({ target: [t.childInactivePeriods.childId, t.childInactivePeriods.fromDate], set: { toDate: null } });
       }
     });
     await audit(ctx, activate ? "Criança reativada" : "Criança marcada como inativa (saída)", { entity: "child", entityId: id });

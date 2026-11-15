@@ -1,3 +1,4 @@
+import { ilhaValida } from "@/lib/islands";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { central, centralPool, c } from "@/db/central";
 import type { JobLogEntry } from "@/db/central/schema";
@@ -88,7 +89,7 @@ export async function hardenTenantIsolation(): Promise<number> {
 }
 
 export type NewInstitution = {
-  slug: string; name: string; email: string; phone: string; address: string; city: string;
+  slug: string; name: string; email: string; phone: string; address: string; island?: string; city: string;
   currency: string; timezone: string;
   directorName: string; directorEmail: string; directorPhone: string;
   planId: string; billingCycle: "MONTHLY" | "YEARLY"; trialDays: number | null;
@@ -103,7 +104,7 @@ export async function createInstitution(input: NewInstitution): Promise<{ instit
     if (exists) throw new Error("Já existe uma instituição com este endereço.");
     const now = new Date();
     const [inst] = await tx.insert(c.institutions).values({
-      slug: input.slug, name: input.name, email: input.email, phone: input.phone, address: input.address, city: input.city,
+      slug: input.slug, name: input.name, email: input.email, phone: input.phone, address: input.address, island: ilhaValida(input.island ?? ""), city: input.city,
       currency: input.currency, timezone: input.timezone, status: "PROVISIONING",
       planId: input.planId, billingCycle: input.billingCycle,
       trialEndsAt: input.trialDays ? new Date(now.getTime() + input.trialDays * 86_400_000) : null,

@@ -14,7 +14,6 @@ const CORES_SALAS = ["#5DC98A", "#F0714F", "#5B8DEF", "#F5B93A", "#A77BDB"];
 const NAVY = "#1B2333";
 const BLUE = "#1E4FA3";
 const ORANGE = "#F0714F";
-const YELLOW = "#F5B93A";
 
 export default async function Landing() {
   const institutions = await central().query.institutions.findMany({
@@ -50,16 +49,6 @@ export default async function Landing() {
 
   return (
     <div className="min-h-screen bg-slate-100 pb-24" id="topo">
-      {/* Cabeçalho */}
-      <header className="flex items-center justify-between px-5 pb-10 pt-5" style={{ backgroundColor: NAVY }}>
-        <Link href="/" className="flex items-center gap-3">
-          <span className="text-2xl font-extrabold leading-none text-white">
-            Nos<span style={{ color: YELLOW }}>Criança</span>
-            <span className="mt-1 block text-xs font-medium text-white/80">Creches de Cabo Verde</span>
-          </span>
-        </Link>
-        <span aria-hidden className="text-2xl text-white">≡</span>
-      </header>
 
       {/* Faixa de destaque */}
       <img src="/hero-criancas.png" alt="Crianças sorridentes numa creche de Cabo Verde" className="block w-full object-cover" />
@@ -92,7 +81,7 @@ export default async function Landing() {
       </section>
 
       {/* Navegação inferior */}
-      <nav aria-label="Navegação principal" className="fixed inset-x-0 bottom-0 z-10 flex justify-around border-t bg-white py-2 text-xs font-semibold" style={{ color: NAVY }}>
+      <nav aria-label="Navegação principal" className="fixed inset-x-0 bottom-0 z-10 flex justify-around border-t bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 text-xs font-semibold [&>a]:min-h-[44px] [&>a]:min-w-[64px] [&>a]:justify-center" style={{ color: NAVY }}>
         <a href="#topo" className="flex flex-col items-center gap-0.5" style={{ color: BLUE }}><span aria-hidden className="text-lg">⌂</span>Início</a>
         <a href="#creches" className="flex flex-col items-center gap-0.5"><span aria-hidden className="text-lg">▦</span>Creches</a>
         <Link href="/pedir-adesao" className="flex flex-col items-center gap-0.5"><span aria-hidden className="text-lg">＋</span>Adesão</Link>

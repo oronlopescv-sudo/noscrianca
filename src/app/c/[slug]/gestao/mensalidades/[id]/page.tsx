@@ -37,7 +37,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ slug: 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           <Card title="Itens" pad={false}>
-            <table className="table">
+            <div className="overflow-x-auto"><table className="table">
               <thead><tr><th>Descrição</th><th className="text-right">Valor</th></tr></thead>
               <tbody>
                 {inv.items.map((i) => <tr key={i.id}><td>{i.description}</td><td className="text-right">{money(i.amountCents, cur)}</td></tr>)}
@@ -45,7 +45,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ slug: 
                 <tr><td>Pago</td><td className="text-right">{money(inv.paidCents, cur)}</td></tr>
                 <tr><td className="font-semibold">Em dívida</td><td className="text-right font-semibold">{money(Math.max(due, 0), cur)}</td></tr>
               </tbody>
-            </table>
+            </table></div>
           </Card>
           <Card title="Pagamentos" pad={false}>
             {inv.payments.length === 0 ? <div className="card-pad"><EmptyState title="Sem pagamentos" text="Registe o pagamento quando for recebido." /></div> : (
@@ -59,7 +59,9 @@ export default async function InvoicePage({ params }: { params: Promise<{ slug: 
                     </div>
                     <div className="flex items-center gap-2">
                       {p.receipt && !p.reversedAt && <a href={`${ctx.base}/recibo/${p.id}`} target="_blank" rel="noopener" className="btn btn-ghost btn-sm">Recibo {p.receipt.number}</a>}
-                      {canManage && !p.reversedAt && <ConfirmAction action={reversePaymentAction} hidden={{ slug, paymentId: p.id }} label="Estornar" title="Estornar pagamento" text="O pagamento fica registado como estornado e o recibo deixa de ser válido." confirmLabel="Estornar" danger />}
+                      {canManage && !p.reversedAt && <ConfirmAction action={reversePaymentAction} hidden={{ slug, paymentId: p.id }} label="Estornar" title="Estornar pagamento" text="O pagamento fica registado como estornado e o recibo deixa de ser válido." confirmLabel="Estornar" danger>
+                        <Field label="Motivo do estorno"><input name="reason" className="input" required minLength={3} maxLength={200} placeholder="Ex.: valor registado por engano" /></Field>
+                      </ConfirmAction>}
                     </div>
                   </li>
                 ))}

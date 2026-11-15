@@ -127,13 +127,13 @@ export async function ChildCalendar({ ctx, childId, month, basePath, showFinance
           const due = dueByDay.get(key);
           const isToday = key === today;
           return (
-            <div key={i} className={`min-h-[62px] bg-white p-1.5 text-left ${isToday ? "ring-2 ring-inset ring-accent" : ""}`}>
+            <div key={i} className={`min-h-[62px] min-w-0 bg-white p-1 text-left sm:p-1.5 ${isToday ? "ring-2 ring-inset ring-accent" : ""}`}>
               <p className={`text-xs font-semibold ${isToday ? "text-accent" : ""}`}>{day}</p>
-              <div className="mt-0.5 space-y-0.5 text-[11px] leading-tight">
+              <div className="mt-0.5 space-y-0.5 break-words text-[9px] leading-tight sm:text-[11px]">
                 {a === "PRESENT" && <p className="text-emerald-700">Presente</p>}
                 {a === "ABSENT" && <p className="text-red-700">Falta</p>}
-                {paid !== undefined && <p className="font-medium text-emerald-800">Pagou {money(paid, cur)}</p>}
-                {due !== undefined && <p className="text-red-700">Vence {money(due, cur)}</p>}
+                {paid !== undefined && <p className="font-medium text-emerald-800">Pagou <Valor v={paid} cur={cur} /></p>}
+                {due !== undefined && <p className="text-red-700">Vence <Valor v={due} cur={cur} /></p>}
               </div>
             </div>
           );
@@ -191,4 +191,11 @@ export async function ChildCalendar({ ctx, childId, month, basePath, showFinance
       })()}
     </Card>
   );
+}
+
+/** Valor numa célula do calendário: no telemóvel não cabe a moeda, fica só o número, sem partir. */
+function Valor({ v, cur }: { v: number; cur: string }) {
+  const texto = money(v, cur);
+  const numero = texto.replace(cur, "").trim();
+  return <span className="block whitespace-nowrap">{numero}<span className="hidden sm:inline"> {cur}</span></span>;
 }

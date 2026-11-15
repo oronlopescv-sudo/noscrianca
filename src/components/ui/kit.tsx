@@ -7,7 +7,7 @@ export function PageHeader({ title, subtitle, actions, back }: { title: string; 
   return (
     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        {back && <Link href={back.href} className="mb-1 inline-block text-[13px] font-medium text-ink-soft hover:text-accent">← {back.label}</Link>}
+        {back && <Link href={back.href} className="-ml-1 mb-1 inline-flex min-h-[40px] items-center px-1 text-[13px] font-medium text-ink-soft hover:text-accent">← {back.label}</Link>}
         <h1 className="truncate text-xl sm:text-2xl">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-ink-soft">{subtitle}</p>}
       </div>
@@ -75,7 +75,7 @@ export function Stat({ label, value, hint, icon, tone = "accent", href }: { labe
       {icon && <span className={clsx("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", TONES[tone])}>{icon}</span>}
       <div className="min-w-0">
         <p className="text-xs font-medium text-ink-soft">{label}</p>
-        <p className="break-words text-lg font-semibold leading-tight sm:text-xl">{value}</p>
+        <p className="text-base font-semibold leading-tight [overflow-wrap:anywhere] min-[400px]:text-lg sm:text-xl">{value}</p>
         {hint && <p className="mt-0.5 text-xs text-ink-soft">{hint}</p>}
       </div>
     </>

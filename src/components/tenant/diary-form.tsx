@@ -44,7 +44,7 @@ export function DiaryForm({ slug, date, kids, fixedChildId }: { slug: string; da
       </Field>
       {cfg.presets.length > 1 && (
         <div className="-mt-2 flex flex-wrap gap-1.5">
-          {cfg.presets.map((p) => <button key={p} type="button" onClick={() => setTitle(p)} className={clsx("rounded-full border px-2.5 py-1 text-xs", title === p ? "border-accent text-accent" : "border-line text-ink-soft")}>{p}</button>)}
+          {cfg.presets.map((p) => <button key={p} type="button" onClick={() => setTitle(p)} className={clsx("min-h-[36px] rounded-full border px-3 py-1.5 text-[13px]", title === p ? "border-accent text-accent" : "border-line text-ink-soft")}>{p}</button>)}
         </div>
       )}
       <Field label="Detalhes">
@@ -52,7 +52,7 @@ export function DiaryForm({ slug, date, kids, fixedChildId }: { slug: string; da
       </Field>
       {cfg.details.length > 0 && (
         <div className="-mt-2 flex flex-wrap gap-1.5">
-          {cfg.details.map((p) => <button key={p} type="button" onClick={() => setDetails(p)} className={clsx("rounded-full border px-2.5 py-1 text-xs", details === p ? "border-accent text-accent" : "border-line text-ink-soft")}>{p}</button>)}
+          {cfg.details.map((p) => <button key={p} type="button" onClick={() => setDetails(p)} className={clsx("min-h-[36px] rounded-full border px-3 py-1.5 text-[13px]", details === p ? "border-accent text-accent" : "border-line text-ink-soft")}>{p}</button>)}
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -66,7 +66,7 @@ export function DiaryForm({ slug, date, kids, fixedChildId }: { slug: string; da
         <fieldset>
           <div className="mb-1.5 flex items-center justify-between">
             <legend className="label !mb-0">Crianças ({selected.length} de {kids.length})</legend>
-            <button type="button" className="text-xs font-medium text-accent" onClick={() => setSelected(selected.length === kids.length ? [] : kids.map((k) => k.id))}>
+            <button type="button" className="-my-2 min-h-[40px] px-1 text-[13px] font-medium text-accent" onClick={() => setSelected(selected.length === kids.length ? [] : kids.map((k) => k.id))}>
               {selected.length === kids.length ? "Limpar" : "Selecionar todas"}
             </button>
           </div>
