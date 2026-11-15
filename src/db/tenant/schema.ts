@@ -544,3 +544,28 @@ export type Setting = typeof settings.$inferSelect;
 export type DiaryEntry = typeof diaryEntries.$inferSelect;
 export type DiaryType = (typeof diaryType.enumValues)[number];
 export type PaymentMethod = (typeof paymentMethod.enumValues)[number];
+
+/** Registo de ponto dos funcionários: cada funcionário marca entrada e saída; o diretor confirma, recusa ou corrige. */
+export const timeEntries = pgTable("time_entries", {
+  id: id(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+  /** Dia de trabalho AAAA-MM-DD. */
+  date: text("date").notNull(),
+  /** Horas HH:MM (hora local da creche). clockOut fica vazio enquanto o funcionário não marcar a saída. */
+  clockIn: text("clock_in").notNull(),
+  clockOut: text("clock_out"),
+  /** PENDING (por confirmar), CONFIRMED (confirmado ou corrigido pelo diretor) ou REJECTED (recusado). */
+  status: text("status").notNull().default("PENDING"),
+  /** EMPLOYEE (marcado pelo próprio) ou MANAGER (lançado pelo diretor). */
+  source: text("source").notNull().default("EMPLOYEE"),
+  decidedByName: text("decided_by_name"),
+  decidedAt: ts("decided_at"),
+  correctedByName: text("corrected_by_name"),
+  createdAt: createdAt(),
+}, (t) => [
+  index("time_entries_employee_date_idx").on(t.employeeId, t.date),
+  index("time_entries_status_idx").on(t.status),
+  check("time_entries_status_ck", sql`${t.status} in ('PENDING', 'CONFIRMED', 'REJECTED')`),
+  check("time_entries_source_ck", sql`${t.source} in ('EMPLOYEE', 'MANAGER')`),
+  check("time_entries_hours_ck", sql`${t.clockIn} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' and (${t.clockOut} is null or (${t.clockOut} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' and ${t.clockOut} > ${t.clockIn}))`),
+]);

@@ -58,6 +58,28 @@ export default async function ReportsPage({ params, searchParams }: { params: Pr
           <Card title="Crianças ativas"><p className="text-xl font-semibold">{summary.kids}</p></Card>
         </div>
       )}
+      {ctx.can("finance.view") && (
+        <Card title="Relatório mensal" className="mb-5">
+          <p className="mb-4 text-sm text-ink-soft">Todos os pagamentos do mês, detalhados por dia, em PDF e CSV.</p>
+          <div className="grid gap-4 md:grid-cols-2">
+            {[
+              { modo: "RECEBIDOS", title: "Só recebidos", text: "Pagamentos recebidos das mensalidades e faturas." },
+              ...(ctx.can("payroll.manage") ? [{ modo: "COMPLETO", title: "Recebidos e pagos", text: "Recebidos e salários pagos, em secções separadas, com o saldo do mês." }] : []),
+            ].map((r) => (
+              <form key={r.modo} className="space-y-3 rounded-lg border border-line p-4" method="get" action={`${ctx.base}/relatorio-mensal`}>
+                <p className="font-semibold">{r.title}</p>
+                <p className="text-xs text-ink-soft">{r.text}</p>
+                <Field label="Mês"><input type="month" name="mes" defaultValue={today.slice(0, 7)} required className="input" /></Field>
+                <input type="hidden" name="modo" value={r.modo} />
+                <div className="flex gap-2">
+                  <button className="btn btn-primary btn-sm" type="submit" name="formato" value="pdf">PDF</button>
+                  <button className="btn btn-secondary btn-sm" type="submit" name="formato" value="csv">CSV</button>
+                </div>
+              </form>
+            ))}
+          </div>
+        </Card>
+      )}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {available.map((r) => (
           <Card key={r.kind} title={r.title}>

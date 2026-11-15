@@ -7,7 +7,8 @@ import { Badge, Card, DL, EmptyState, Field, PageHeader } from "@/components/ui/
 import { fmtDate, money, periodLabel, todayIn } from "@/lib/format";
 import { INVOICE_STATUS } from "@/lib/labels";
 import { PAYMENT_METHODS } from "@/lib/payment-methods";
-import { recordPaymentAction, reversePaymentAction, voidInvoiceAction } from "@/server/finance";
+import { recordPaymentAction, reversePaymentAction, sendInvoiceEmailAction, voidInvoiceAction } from "@/server/finance";
+import { ShareInvoice } from "@/components/tenant/share-invoice";
 import { requireTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,11 @@ export default async function InvoicePage({ params }: { params: Promise<{ slug: 
         back={{ href: `${ctx.base}/gestao/mensalidades`, label: "Mensalidades" }}
         title={`Fatura ${inv.number}`}
         subtitle={<><Link href={`${ctx.base}/gestao/criancas/${inv.childId}`} className="link">{inv.child.firstName} {inv.child.lastName}</Link> · {inv.kind === "MONTHLY" ? periodLabel(inv.period) : "Fatura avulsa"} · <Badge tone={INVOICE_STATUS[inv.status]?.tone ?? "gray"}>{INVOICE_STATUS[inv.status]?.label}</Badge></>}
-        actions={<a href={`${ctx.base}/fatura/${inv.id}`} target="_blank" rel="noopener" className="btn btn-secondary">Abrir PDF</a>}
+        actions={<div className="flex flex-wrap gap-2">
+          <a href={`${ctx.base}/fatura/${inv.id}`} target="_blank" rel="noopener" className="btn btn-secondary">Abrir PDF</a>
+          <ShareInvoice url={`${ctx.base}/fatura/${inv.id}`} number={inv.number} child={`${inv.child.firstName} ${inv.child.lastName}`} />
+          {canManage && inv.status !== "VOID" && <ActionForm action={sendInvoiceEmailAction} hidden={hidden}><Submit className="btn btn-primary" pendingText="A enviar…">Enviar por email</Submit></ActionForm>}
+        </div>}
       />
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">

@@ -9,6 +9,7 @@ import { bool, fail, file, run, str, type ActionResult } from "@/lib/result";
 import { createExtraInvoice, generateMonthlyInvoices, METHOD_LABELS, recordPayment, reversePayment, voidInvoice } from "@/lib/services/finance";
 import { mailConfigured, sendMail } from "@/lib/mail";
 import { deleteTenantFile, saveUpload } from "@/lib/storage";
+import { invoicePdf } from "@/lib/services/tenant-pdf";
 import { assertChildAccess, audit, notify, tenantAction, type TenantCtx } from "@/lib/tenant";
 
 type S = ActionResult | null;
@@ -254,3 +255,45 @@ export async function sendPaymentReminderAction(_p: S, fd: FormData): Promise<Ac
   });
 }
 
+
+/** Envia a fatura em PDF por email a todos os encarregados ativos da criança. */
+export async function sendInvoiceEmailAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "finance.manage" });
+    const inv = await ctx.db.query.invoices.findFirst({ where: eq(t.invoices.id, str(fd, "invoiceId")), with: { child: true } });
+    if (!inv) fail("Fatura não encontrada.");
+    await assertChildAccess(ctx, inv!.childId);
+    if (inv!.status === "VOID") fail("Não se envia uma fatura anulada.");
+    const rows = await ctx.db.select({ userId: t.users.id, name: t.users.name, email: t.users.email, status: t.users.status, deletedAt: t.users.deletedAt })
+      .from(t.childGuardians)
+      .innerJoin(t.guardians, eq(t.guardians.id, t.childGuardians.guardianId))
+      .innerJoin(t.users, eq(t.users.id, t.guardians.userId))
+      .where(eq(t.childGuardians.childId, inv!.childId));
+    const recipients = rows.filter((r) => r.status !== "SUSPENDED" && !r.deletedAt && r.email);
+    if (!recipients.length) fail("Esta criança não tem encarregados com email.");
+    if (!mailConfigured()) fail("O email não está configurado no servidor. Use o botão de partilha do WhatsApp.");
+    const doc = await invoicePdf(ctx.db, ctx.settings, inv!.id);
+    if (!doc) fail("Não foi possível gerar o PDF da fatura.");
+    const due = money(Math.max(inv!.totalCents - inv!.paidCents, 0), ctx.settings.currency);
+    const s = ctx.settings;
+    let mailed = 0;
+    for (const g of recipients) {
+      const ok = await sendMail({
+        to: g.email, replyTo: s.email || undefined,
+        subject: `Fatura ${inv!.number} de ${inv!.child.firstName}`,
+        text: [
+          `Olá ${g.name},`, "",
+          `Segue em anexo a fatura ${inv!.number} de ${inv!.child.firstName}.`,
+          `Total: ${money(inv!.totalCents, ctx.settings.currency)} · Em dívida: ${due}.`, "",
+          s.paymentInfo ? `Como pagar:\n${s.paymentInfo}` : "Contacte a creche para saber como pagar.", "",
+          "Obrigado.", s.name,
+        ].join("\n"),
+        attachments: [{ filename: `fatura-${inv!.number}.pdf`, content: doc!.bytes }],
+      });
+      if (ok) mailed++;
+    }
+    await audit(ctx, "Fatura enviada por email", { entity: "invoice", entityId: inv!.id, details: { numero: inv!.number, emails: mailed, destinatarios: recipients.length } });
+    if (mailed < recipients.length) return { ok: true, message: `Fatura enviada a ${mailed} de ${recipients.length} encarregado(s).` };
+    return { ok: true, message: `Fatura enviada por email a ${mailed} encarregado(s).` };
+  });
+}
