@@ -420,6 +420,8 @@ export const publicPhotos = pgTable("public_photos", {
   id: id(),
   path: text("path").notNull(),
   caption: text("caption").notNull().default(""),
+  /** "" = galeria; "atividade-1".."atividade-4" = cartão de atividade do site da creche. */
+  slot: text("slot").notNull().default(""),
   createdAt: createdAt(),
 });
 

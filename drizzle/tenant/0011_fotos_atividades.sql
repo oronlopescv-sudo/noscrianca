@@ -1,0 +1,1 @@
+ALTER TABLE "public_photos" ADD COLUMN "slot" text DEFAULT '' NOT NULL;

@@ -98,7 +98,7 @@ export async function uploadPublicPhotoAction(_p: S, fd: FormData): Promise<Acti
     const f = file(fd, "photo");
     if (!f) fail("Escolha uma fotografia.");
     if (!bool(fd, "confirm")) fail("Confirme que tem autorização para publicar esta fotografia.");
-    const [{ n }] = await ctx.db.select({ n: count() }).from(t.publicPhotos);
+    const [{ n }] = await ctx.db.select({ n: count() }).from(t.publicPhotos).where(eq(t.publicPhotos.slot, ""));
     if (n >= MAX_PUBLIC_PHOTOS) fail(`A página pública pode ter até ${MAX_PUBLIC_PHOTOS} fotografias. Remova uma para adicionar outra.`);
     const saved = await saveUpload(ctx.institution.id, "public", f!, { kind: "image", maxMb: 5 });
     await ctx.db.insert(t.publicPhotos).values({ path: saved.path, caption: str(fd, "caption").slice(0, 120) });
@@ -115,5 +115,34 @@ export async function deletePublicPhotoAction(_p: S, fd: FormData): Promise<Acti
     await deleteTenantFile(ctx.institution.id, row.path);
     await audit(ctx, "Fotografia removida da página pública");
     return { ok: true, message: "Fotografia removida." };
+  });
+}
+
+/** Fotografia e título de um dos quatro cartões de atividades do site da creche.
+ * Substitui a que lá estiver; sem fotografia própria, o site mostra a imagem de exemplo. */
+export async function uploadActivityPhotoAction(_p: S, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const ctx = await tenantAction(str(fd, "slug"), { permission: "settings.manage" });
+    const n = Number(str(fd, "n"));
+    if (![1, 2, 3, 4].includes(n)) fail("Atividade inválida.");
+    const slot = `atividade-${n}`;
+    const caption = str(fd, "caption").slice(0, 40);
+    const f = file(fd, "photo");
+    const atual = await ctx.db.query.publicPhotos.findFirst({ where: eq(t.publicPhotos.slot, slot) });
+    if (!f) {
+      // Só o título: precisa de já haver fotografia própria para o guardar.
+      if (!atual) fail("Escolha uma fotografia para esta atividade.");
+      await ctx.db.update(t.publicPhotos).set({ caption }).where(eq(t.publicPhotos.id, atual!.id));
+      return { ok: true, message: "Título da atividade guardado." };
+    }
+    if (!bool(fd, "confirm")) fail("Confirme que tem autorização para publicar esta fotografia.");
+    const saved = await saveUpload(ctx.institution.id, "public", f, { kind: "image", maxMb: 5 });
+    await ctx.db.insert(t.publicPhotos).values({ path: saved.path, caption, slot });
+    if (atual) {
+      await ctx.db.delete(t.publicPhotos).where(eq(t.publicPhotos.id, atual.id));
+      await deleteTenantFile(ctx.institution.id, atual.path);
+    }
+    await audit(ctx, "Fotografia de atividade atualizada no site", { details: { atividade: n } });
+    return { ok: true, message: "Fotografia da atividade publicada." };
   });
 }

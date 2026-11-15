@@ -3,7 +3,8 @@ import { ActionButton, ActionForm, ConfirmAction, Submit } from "@/components/ui
 import { Card, Check, Field, PageHeader } from "@/components/ui/kit";
 import { t } from "@/db/tenant";
 import { requireTenant } from "@/lib/tenant";
-import { deletePublicPhotoAction, savePublicPageAction, saveSettingsAction, removeCoverAction, removeLogoAction, uploadCoverAction, uploadLogoAction, uploadPublicPhotoAction } from "@/server/settings";
+import { deletePublicPhotoAction, savePublicPageAction, saveSettingsAction, removeCoverAction, removeLogoAction, uploadCoverAction, uploadLogoAction, uploadActivityPhotoAction, uploadPublicPhotoAction } from "@/server/settings";
+import { ATIVIDADES, HERO_PADRAO } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,9 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
   const s = ctx.settings;
   const slug = ctx.institution.slug;
   const canWrite = !ctx.readOnly;
-  const photos = await ctx.db.query.publicPhotos.findMany({ orderBy: [asc(t.publicPhotos.createdAt)] });
+  const allPhotos = await ctx.db.query.publicPhotos.findMany({ orderBy: [asc(t.publicPhotos.createdAt)] });
+  const photos = allPhotos.filter((p) => !p.slot);
+  const activityPhoto = (n: number) => allPhotos.find((p) => p.slot === `atividade-${n}`);
   return (
     <>
       <PageHeader title="Definições da instituição" subtitle="Dados que aparecem em faturas, recibos e no portal dos pais" />
@@ -64,7 +67,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
           </Card>
           <Card title="Capa da página pública">
             <div className="mb-4">
-              {s.coverPath ? <img src={`${ctx.base}/capa?v=${encodeURIComponent(s.coverPath.slice(-24))}`} alt="Capa atual" className="h-36 w-full rounded-xl object-cover" /> : <div className="flex h-36 w-full items-center justify-center rounded-xl bg-surface text-xs text-ink-soft">Sem capa — a página usa as fotografias publicadas</div>}
+              {s.coverPath ? <img src={`${ctx.base}/capa?v=${encodeURIComponent(s.coverPath.slice(-24))}`} alt="Capa atual" className="h-36 w-full rounded-xl object-cover" /> : <div className="relative"><img src={HERO_PADRAO} alt="Imagem de exemplo" className="h-36 w-full rounded-xl object-cover" /><span className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium text-ink-soft">Imagem de exemplo</span></div>}
             </div>
             {canWrite && (
               <div className="space-y-3">
@@ -118,6 +121,36 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
             )}
           </div>
         </div>
+      </Card>
+
+      <Card title="Atividades do site" className="mt-5">
+        <p className="mb-4 text-sm text-ink-soft">Os quatro cartões "As Nossas Atividades" do site. Cada um já tem uma imagem de exemplo; carregue uma fotografia da creche para a substituir e, se quiser, mude o título.</p>
+        <ul className="grid gap-4 sm:grid-cols-2">
+          {ATIVIDADES.map((a) => {
+            const p = activityPhoto(a.n);
+            return (
+              <li key={a.n} className="rounded-btn border border-line p-3">
+                <div className="relative overflow-hidden rounded-xl">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p ? `${ctx.base}/foto/${p.id}` : a.img} alt="" className="aspect-[16/9] w-full object-cover" />
+                  <span className="absolute bottom-0 left-0 rounded-tr-xl px-3 py-1 text-sm font-semibold text-white" style={{ backgroundColor: a.color }}>{p?.caption || a.label}</span>
+                  {!p && <span className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium text-ink-soft">Imagem de exemplo</span>}
+                </div>
+                {canWrite && (
+                  <ActionForm action={uploadActivityPhotoAction} hidden={{ slug, n: a.n }} className="mt-3 space-y-3">
+                    <Field label="Título"><input name="caption" className="input" maxLength={40} defaultValue={p?.caption ?? ""} placeholder={a.label} /></Field>
+                    <Field label={p ? "Trocar fotografia (opcional)" : "Fotografia da creche"}><input name="photo" type="file" accept="image/*" required={!p} className="input" /></Field>
+                    <Check name="confirm" label="Esta fotografia pode ser pública: não mostra crianças, ou tenho autorização dos encarregados." />
+                    <div className="flex items-center justify-end gap-2">
+                      {p && <ConfirmAction action={deletePublicPhotoAction} hidden={{ slug, id: p.id }} label="Repor exemplo" title="Repor imagem de exemplo" text="A fotografia da creche é removida e o cartão volta a mostrar a imagem de exemplo." confirmLabel="Repor" danger />}
+                      <Submit>{p ? "Guardar" : "Carregar fotografia"}</Submit>
+                    </div>
+                  </ActionForm>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       </Card>
     </>
   );
