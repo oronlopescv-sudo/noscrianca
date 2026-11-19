@@ -337,6 +337,9 @@ async function assignableRole(ctx: TenantCtx, roleId: string) {
   const role = await ctx.db.query.roles.findFirst({ where: eq(t.roles.id, roleId) });
   if (!role) fail("Cargo inválido.");
   if (role!.key === DIRECTOR_KEY) fail("O cargo de diretor só pode ser atribuído pela plataforma.");
+  // Ninguém atribui um cargo com permissões que o próprio não tem
+  if (!ctx.isDirector && role!.permissions.some((p) => !ctx.can(p as Parameters<typeof ctx.can>[0])))
+    fail("Não pode atribuir um cargo com permissões que o seu cargo não tem.");
   return role!;
 }
 

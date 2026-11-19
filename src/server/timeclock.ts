@@ -23,7 +23,14 @@ export async function clockInAction(_p: S, fd: FormData): Promise<ActionResult> 
     const open = await ctx.db.query.timeEntries.findFirst({ where: and(eq(t.timeEntries.employeeId, employeeId), isNull(t.timeEntries.clockOut)) });
     if (open) fail(`Já tem uma entrada aberta desde as ${open.clockIn} de ${open.date.split("-").reverse().join("/")}. Marque primeiro a saída.`);
     const clockIn = nowHM(ctx.settings.timezone);
-    await ctx.db.insert(t.timeEntries).values({ employeeId, date: today, clockIn, source: "EMPLOYEE", status: "PENDING" });
+    try {
+      await ctx.db.insert(t.timeEntries).values({ employeeId, date: today, clockIn, source: "EMPLOYEE", status: "PENDING" });
+    } catch (e: any) {
+      // 23505 = índice time_entries_open_uq: já existe entrada em aberto (corrida/duplo toque)
+      const codigo = e?.code ?? e?.cause?.code;
+      if (codigo === "23505") fail("Já tem uma entrada aberta. Marque primeiro a saída.");
+      throw e;
+    }
     return { ok: true, message: `Entrada marcada às ${clockIn}. Fica à espera de confirmação da direção.` };
   });
 }

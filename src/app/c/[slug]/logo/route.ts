@@ -10,5 +10,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   const s = await (await getTenantDb(inst.id)).query.settings.findFirst({ where: eq(t.settings.id, 1) });
   const f = s?.logoPath ? await readTenantFile(inst.id, s.logoPath) : null;
   if (!f) return new Response(null, { status: 404 });
-  return new Response(new Uint8Array(f.data), { headers: { "Content-Type": f.mime, "Cache-Control": "public, max-age=3600" } });
+  return new Response(new Uint8Array(f.data), { headers: { "Content-Type": f.mime, "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff" } });
 }

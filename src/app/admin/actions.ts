@@ -298,7 +298,7 @@ export async function impersonateAction(_p: S, fd: FormData): Promise<ActionResu
     const inst = await liveInstitution(str(fd, "institutionId"));
     const db = await getTenantDb(inst.id);
     const role = await db.query.roles.findFirst({ where: eq(t.roles.key, DIRECTOR_KEY) });
-    const director = await db.query.users.findFirst({ where: and(eq(t.users.roleId, role!.id), eq(t.users.status, "ACTIVE")) });
+    const director = await db.query.users.findFirst({ where: and(eq(t.users.roleId, role!.id), eq(t.users.status, "ACTIVE")), orderBy: t.users.createdAt });
     if (!director) fail("Ainda nenhum diretor ativou a conta nesta instituição.");
     await createSession({ scope: "TENANT", userId: director!.id, institutionId: inst.id, impersonatorId: admin.id });
     await platformAudit(admin, "Entrou como diretor (suporte)", { entity: "institution", entityId: inst.id, institutionId: inst.id, details: { diretor: director!.email } });

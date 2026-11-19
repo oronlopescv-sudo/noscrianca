@@ -196,7 +196,12 @@ export async function deleteDiaryAction(_p: S, fd: FormData): Promise<ActionResu
     if (!ctx.isDirector && entry!.createdById !== ctx.user.id) fail("Só pode eliminar registos criados por si.");
     const all = bool(fd, "group") && entry!.groupId;
     const removed = all
-      ? await ctx.db.delete(t.diaryEntries).where(eq(t.diaryEntries.groupId, entry!.groupId!)).returning()
+      // Em grupo só a direção apaga registos de todos; o educador elimina os seus
+      ? await ctx.db.delete(t.diaryEntries)
+          .where(ctx.isDirector
+            ? eq(t.diaryEntries.groupId, entry!.groupId!)
+            : and(eq(t.diaryEntries.groupId, entry!.groupId!), eq(t.diaryEntries.createdById, ctx.user.id)))
+          .returning()
       : await ctx.db.delete(t.diaryEntries).where(eq(t.diaryEntries.id, entry!.id)).returning();
     if (entry!.photoPath) {
       const stillUsed = await ctx.db.query.diaryEntries.findFirst({ where: eq(t.diaryEntries.photoPath, entry!.photoPath) });

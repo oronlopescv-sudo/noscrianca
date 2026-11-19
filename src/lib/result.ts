@@ -26,8 +26,9 @@ export async function run(fn: () => Promise<ActionResult | void>): Promise<Actio
       return { ok: false, error: "Já existe um registo com estes dados. Atualize a página e confirme antes de tentar de novo." };
     }
     // 42P10 = falta de índice único exigido por um upsert; 42P01/42704 = objeto
-    // inexistente — sinal de base de dados desatualizada (migrações não aplicadas).
-    if (codigo === "42P10" || codigo === "42P01" || codigo === "42704") {
+    // inexistente; 42703 = coluna inexistente; 23514 = violação de CHECK —
+    // todos sinal de base de dados desatualizada (migrações não aplicadas).
+    if (codigo === "42P10" || codigo === "42P01" || codigo === "42704" || codigo === "42703" || codigo === "23514") {
       console.error("[action] base de dados desatualizada:", e);
       return { ok: false, error: "A base de dados desta creche está a ser atualizada. Espere um minuto, atualize a página e tente de novo (se persistir, contacte a plataforma)." };
     }

@@ -45,6 +45,8 @@ export async function decideJustificationAction(_p: S, fd: FormData): Promise<Ac
     const ctx = await tenantAction(str(fd, "slug"), { permission: "attendance.record", write: true });
     const row = await ctx.db.query.attendance.findFirst({ where: eq(t.attendance.id, str(fd, "attendanceId")) });
     if (!row) fail("Falta não encontrada.");
+    // A falta tem de pertencer ao âmbito (turmas autorizadas) de quem decide
+    if (!(await canAccessChild(ctx, row!.childId))) fail("Não tem acesso a esta criança.");
     if (row!.justificationStatus !== "PENDING" && row!.justificationStatus !== "UNJUSTIFIED") fail("Não há justificação por rever.");
     const decision = str(fd, "decision");
     if (decision !== "JUSTIFIED" && decision !== "UNJUSTIFIED") fail("Decisão inválida.");

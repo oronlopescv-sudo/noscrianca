@@ -8,6 +8,8 @@ import { periodLabel } from "@/lib/format";
  * já emitidos: se ficasse, a inserção falhava por número duplicado e o erro
  * chegava à direção como "erro inesperado". */
 async function nextNumber(tx: TenantExecutor, kind: "invoice" | "receipt"): Promise<string> {
+  // Apenas uma emissão de cada vez (duas corridas geravam números duplicados → 23505)
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`nc-num:${kind}`}))`);
   const prefixo = kind === "invoice" ? "F" : "R";
   const ano = new Date().getUTCFullYear();
   const tabela = kind === "invoice" ? t.invoices : t.receipts;

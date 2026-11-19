@@ -88,11 +88,12 @@ export async function requestResetAction(_p: S, fd: FormData): Promise<ActionRes
     const inst = await usableInstitution(str(fd, "slug"));
     const email = str(fd, "email").toLowerCase();
     const key = `reset:${inst.id}:${email}`;
-    if (await lockedFor(key)) fail("Demasiados pedidos. Tente novamente mais tarde.");
-    await recordFailure(key);
     const db = await getTenantDb(inst.id);
     const user = await db.query.users.findFirst({ where: and(eq(t.users.email, email), eq(t.users.status, "ACTIVE"), isNull(t.users.deletedAt)) });
     if (user) {
+      // O limite só conta quando há envio a real (emails inexistentes não ficam trancados)
+      if (await lockedFor(key)) fail("Demasiados pedidos. Tente novamente mais tarde.");
+      await recordFailure(key);
       const url = resetUrl(inst.slug, await createAuthToken(db, user.id, "RESET"));
       await sendMail({
         to: user.email, subject: `Recuperar acesso — ${inst.name}`,
