@@ -116,8 +116,17 @@ export async function setChildStatusAction(_p: S, fd: FormData): Promise<ActionR
       } else {
         await tx.update(t.children).set({ status: "INACTIVE", leftAt: today }).where(eq(t.children.id, id));
         // Saída, regresso e nova saída no mesmo dia: o período desse dia volta a ficar em aberto.
-        await tx.insert(t.childInactivePeriods).values({ childId: id, fromDate: today })
-          .onConflictDoUpdate({ target: [t.childInactivePeriods.childId, t.childInactivePeriods.fromDate], set: { toDate: null } });
+        // Upsert tolerante: não depende de existir o índice único (algumas bases
+        // ficaram sem a PK composta por migrações parciais/restaurações).
+        const existente = await tx.query.childInactivePeriods.findFirst({
+          where: and(eq(t.childInactivePeriods.childId, id), eq(t.childInactivePeriods.fromDate, today)),
+        });
+        if (existente) {
+          await tx.update(t.childInactivePeriods).set({ toDate: null })
+            .where(and(eq(t.childInactivePeriods.childId, id), eq(t.childInactivePeriods.fromDate, today)));
+        } else {
+          await tx.insert(t.childInactivePeriods).values({ childId: id, fromDate: today });
+        }
       }
     });
     await audit(ctx, activate ? "Criança reativada" : "Criança marcada como inativa (saída)", { entity: "child", entityId: id });
